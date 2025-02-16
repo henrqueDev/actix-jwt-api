@@ -1,5 +1,5 @@
 use actix_web::{get, App, HttpResponse, HttpServer, Responder};
-use pethotel_api::http::controllers::user_controller;
+use pethotel_api::http::controllers::{auth_controller, user_controller};
 
 #[get("/")]
 async fn check_running() -> impl Responder {
@@ -11,7 +11,9 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(|| {
         let app = App::new()
             .service(check_running)
-            .configure(user_controller::config);
+            .configure(user_controller::config)
+            .configure(auth_controller::config);
+        
         return app;
     })
     .workers(4)

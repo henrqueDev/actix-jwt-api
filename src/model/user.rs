@@ -13,3 +13,14 @@ pub struct User {
     pub updated_at: String,
     pub deleted_at: String
 }
+
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
+pub struct UserDTO {
+    pub name: String,
+    pub email: String,
+    pub password: String,
+    pub created_at: String, 
+    pub updated_at: String,
+    pub deleted_at: String
+}
+

@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use std::time::{Duration, UNIX_EPOCH}; // Import std::time::Duration
+use std::time::{Duration, UNIX_EPOCH};
+
+use crate::model::user::UserDTO;
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Claims {
@@ -11,30 +13,26 @@ pub struct Claims {
     exp: u64,
 }
 
-pub fn signature() -> String {
+pub fn encode_jwt(user: UserDTO) -> String {
     let now_plus_60 = std::time::SystemTime::now()
-        .checked_add(Duration::from_secs(6120)) // Use the imported Duration
+        .checked_add(Duration::from_secs(6120))
         .unwrap()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs();
 
-    // create the claim
     let c = Claims {
         custom_claim: "".to_owned(),
-        iss: "http://www.example.com".to_owned(),
-        sub: "name of claim".to_owned(),
+        iss: "http://0.0.0.0".to_owned(),
+        sub: user.email.to_owned(),
         exp: now_plus_60,
-        aud: "John Smith".to_owned(),
+        aud: "pethotel-api".to_owned(),
     };
 
-    // create the header
     let header = jsonwebtoken::Header::default();
 
-    // create the encoding key using the secret string
-    let secret = jsonwebtoken::EncodingKey::from_secret("secret".as_bytes());
+    let secret = jsonwebtoken::EncodingKey::from_secret(user.password.as_bytes());
 
-    // encode token
     let res = jsonwebtoken::encode(&header, &c, &secret).unwrap();
     return res;
 }

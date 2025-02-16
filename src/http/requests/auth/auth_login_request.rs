@@ -1,8 +1,7 @@
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
-pub struct UserStoreRequest {
-    pub name: String,
+pub struct AuthLoginRequest {
     pub email: String,
     pub password: String
 }

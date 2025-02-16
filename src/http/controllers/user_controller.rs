@@ -1,8 +1,27 @@
 use actix_web::{web::{self, ServiceConfig}, HttpResponse, Responder};
-use crate::http::requests::user::user_store_request::UserStoreRequest;
+use chrono::Local;
+use crate::{http::requests::user::user_store_request::UserStoreRequest, model::user::UserDTO, services::auth::encode_jwt};
 
 pub async fn store(body: web::Json<UserStoreRequest>) -> impl Responder {
-    HttpResponse::Ok().body(format!("{:#?}", body))
+    let mut data = body.into_inner();
+    
+    data.password = match bcrypt::hash(&data.password, 12) {
+        Ok(password) => password,
+        Err(_err) => panic!("Error while bcrypt password")
+    };
+
+    let new_user = UserDTO{
+        name: data.name, 
+        email: data.email,
+        password: data.password,
+        created_at: Local::now().to_string(), 
+        updated_at: String::from(""), 
+        deleted_at: String::from("")
+    };
+
+    let token = encode_jwt(new_user);
+
+    HttpResponse::Ok().body(format!("{:#?}", token))
 }
 
 pub async fn users() -> impl Responder {
