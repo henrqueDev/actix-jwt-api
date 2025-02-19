@@ -14,9 +14,9 @@ pub async fn store(body: web::Json<UserStoreRequest>) -> impl Responder {
         name: data.name, 
         email: data.email,
         password: data.password,
-        created_at: Local::now().to_string(), 
-        updated_at: String::from(""), 
-        deleted_at: String::from("")
+        created_at: Some(Local::now().to_string()), 
+        updated_at: Some(String::from("")), 
+        deleted_at: Some(String::from(""))
     };
 
     let token = encode_jwt(new_user);

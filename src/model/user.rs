@@ -19,8 +19,8 @@ pub struct UserDTO {
     pub name: String,
     pub email: String,
     pub password: String,
-    pub created_at: String, 
-    pub updated_at: String,
-    pub deleted_at: String
+    pub created_at: Option<String>, 
+    pub updated_at: Option<String>,
+    pub deleted_at: Option<String>
 }
 

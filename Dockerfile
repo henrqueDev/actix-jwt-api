@@ -8,7 +8,7 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 
 
-COPY ./src ./src
+COPY . ./
 # # Create an empty src directory to trick Cargo into thinking it's a valid Rust project
 # RUN mkdir src && echo "fn main() {}" > src/main.rs
 
