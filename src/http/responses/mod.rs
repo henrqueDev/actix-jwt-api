@@ -1,1 +1,2 @@
-pub mod auth_login_response;
+pub mod auth;
+pub mod user;
