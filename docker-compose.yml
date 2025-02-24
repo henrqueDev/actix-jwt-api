@@ -6,9 +6,9 @@ services:
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
-      POSTGRES_DB: database
+      POSTGRES_DB: ${DB_NAME}
     ports:
-      - "5432:5432"
+      - "${DB_PORT}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -20,7 +20,7 @@ services:
     depends_on:
       - postgres
     ports:
-      - "8080:8080"
+      - "${APP_PORT}:8080"
     command: ["./pethotel-api"]
 
 volumes:

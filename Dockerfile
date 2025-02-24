@@ -15,13 +15,18 @@ COPY . ./
 # Build the dependencies without the actual source code to cache dependencies separately
 RUN cargo build --release
 
+
 # Now copy the source code
 
 # Build your application
 
 # Start a new stage to create a smaller image without unnecessary build dependencies
-#FROM mcr.microsoft.com/windows:20H2
 FROM debian:bookworm-slim
+
+# Install libpq for PostgreSQL connectivity
+RUN apt-get update && \
+    apt-get install -y libpq5 && \
+    rm -rf /var/lib/apt/lists/*
 
 # Set the working directory
 WORKDIR /app
