@@ -37,8 +37,6 @@ pub async fn other() -> impl Responder {
 pub fn config(cfg: &mut ServiceConfig) {
     cfg.service(
 web::scope("/users")
-            .route("/", web::get().to(users))
-            .route("/other", web::get().to(other))
             .route("/store", web::post().to(store))
     );
 }
