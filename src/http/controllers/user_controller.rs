@@ -12,26 +12,54 @@ pub async fn store(body: web::Json<UserStoreRequest>) -> impl Responder {
         Err(_err) => panic!("Error while bcrypt password")
     };
 
+    let date_now = Utc::now();
+
     let new_user = UserDTO{
         name: data.name, 
-        email: data.email,
+        email: data.email.clone(),
         password: data.password,
-        created_at: Some(Local::now().to_string()), 
-        updated_at: Some(String::from("")), 
-        deleted_at: Some(String::from(""))
+        created_at: Some(date_now), 
+        updated_at: Some(date_now), 
+        deleted_at: None
     };
 
-    let token = encode_jwt(new_user);
+    let conn = &mut get_connection().await.unwrap();
+    let create_user = diesel::insert_into(users::table)
+        .values(new_user)
+        .execute(conn)
+        .await;
 
-    HttpResponse::Ok().body(format!("{:#?}", token))
-}
+    match create_user {
+        Ok(_s) => {
 
-pub async fn users() -> impl Responder {
-    HttpResponse::Ok().body("Bem vindo ao PetHotel API! Rota: Users")
-}
+            let user_created = users::table
+                .filter(users::email.eq(data.email))
+                .select(User::as_select())
+                .get_result::<User>(conn)
+                .await
+                .expect("Error trying get user stored");
 
-pub async fn other() -> impl Responder {
-    HttpResponse::Ok().body("Bem vindo ao PetHotel API! Rota: Users")
+            let response = UserStoreResponse{
+                message: String::from("User stored successfuly!"),
+                user: user_created
+            };
+
+            return HttpResponse::Ok()
+                .content_type(ContentType::json())
+                .json(response);
+        },
+        Err(error) => {
+
+            let response = UserStoreError{
+                message: String::from("Error while trying store User!"),
+                error: error.to_string()
+            };
+
+            return HttpResponse::InternalServerError()
+                .content_type(ContentType::json())
+                .json(response);
+        }
+    }
 }
 
 pub fn config(cfg: &mut ServiceConfig) {
