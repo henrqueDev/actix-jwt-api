@@ -9,8 +9,9 @@ actix-web = "4"
 dotenv="0.15"
 dotenvy = "0.15"
 diesel_migrations = "2.2.0"
-serde = "1.0.217"
-chrono = "0.4.39"
+diesel-async = { version = "0.5.2", features = ["postgres"] }
+serde = { version = "1.0.217", features = ["derive"] }
+chrono = { version = "0.4.39", features = ["serde"] }
 bcrypt = "0.17.0"
 jsonwebtoken = "9.3.0"
 time = "0.3"
