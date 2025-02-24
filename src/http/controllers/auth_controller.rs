@@ -1,33 +1,27 @@
-use actix_web::{http::header::ContentType, web::{self, ServiceConfig}, HttpResponse, Responder};
-use chrono::Local;
+use actix_web::{http::header::ContentType, web::{self, ServiceConfig}, HttpRequest, HttpResponse, Responder};
+use diesel::{ExpressionMethods, QueryDsl, SelectableHelper};
+use diesel_async::RunQueryDsl;
 
-use crate::{http::{requests::auth::auth_login_request::AuthLoginRequest, responses::auth_login_response::AuthLoginResponse}, model::user::UserDTO, services::auth::{decode_jwt, encode_jwt}};
+use crate::{database::db::get_connection, http::{requests::auth::auth_login_request::AuthLoginRequest, responses::auth::auth_login_response::{AuthLoginError, AuthLoginResponse}}, model::user::user::User, schema::users, services::auth::{decode_jwt, encode_jwt}};
 
 pub async fn login(body: web::Json<AuthLoginRequest>) -> impl Responder {
     
-    let hash = match bcrypt::hash(body.password.as_bytes(), 12) {
-        Ok(hash) => hash,
-        Err(_err) => panic!("Some error raised while hashing password")
-    };
+    let conn = &mut get_connection().await.unwrap();
 
-    let validate = match bcrypt::verify("password".as_bytes(), &hash) {
-        Ok(result) => result,
-        Err(_err) => panic!("Some error raised while verifying password")
-    };
+    let get_user = users::table
+        .filter(users::email.eq(&body.email))
+        .select(User::as_select())
+        .get_result::<User>(conn)
+        .await
+        .expect("Error getting user for login");
 
-    if validate == true {
-        let some_user_example = UserDTO {
-            name: String::from("João Embaixadinha"), 
-            email: String::from("jaoembaixadinha@gmail.com"),
-            password: hash,
-            created_at: Some(Local::now().to_string()), 
-            updated_at: Some(String::from("")), 
-            deleted_at: Some(String::from(""))
-        };
+    let result = bcrypt::verify(body.password.as_bytes(),&get_user.password).unwrap();
+    
+    if result == true {
 
-        let token = encode_jwt(some_user_example);        
+        let token = encode_jwt(get_user.email);        
         let response = AuthLoginResponse{
-            message: String::from("Login realizado com sucesso!"),
+            message: String::from("Login successful"),
             token: Some(token)
         }; 
 
@@ -35,22 +29,22 @@ pub async fn login(body: web::Json<AuthLoginRequest>) -> impl Responder {
             .content_type(ContentType::json())
             .json(response)
     } else {
-        let response = AuthLoginResponse{
-            message: String::from("Credenciais inválidas, tente novamente!"),
-            token: None
+        let response = AuthLoginError{
+            message: String::from("Invalid email or password")
         };
 
         HttpResponse::Unauthorized()
             .content_type(ContentType::json())
             .json(response)
     }
-
 }
 
-pub async fn validate_token(body: web::Json<AuthLoginResponse>) -> impl Responder {
-    let token = body.token.as_ref().unwrap();
     
-    match decode_jwt(&token) {
+
+
+pub async fn validate_token(req: HttpRequest) -> impl Responder {
+    let token = req.headers().get("Authorization").unwrap();
+    match decode_jwt(token.to_str().expect("Error casting headervalue to &str")) {
         Ok(claim) => {
             return HttpResponse::Ok()
                 .content_type(ContentType::json())
