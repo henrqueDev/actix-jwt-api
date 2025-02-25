@@ -1,8 +1,8 @@
-use actix_web::{http::header::ContentType, web::{self, ServiceConfig}, HttpResponse, Responder};
+use actix_web::{http::header::ContentType, middleware::from_fn, web::{self, ServiceConfig}, HttpResponse, Responder};
 use chrono::Utc;
 use diesel::{ ExpressionMethods, QueryDsl, SelectableHelper};
 use diesel_async::RunQueryDsl;
-use crate::{database::db::get_connection, http::{requests::user::user_store_request::UserStoreRequest, responses::user::user_store_response::{UserStoreError, UserStoreResponse}}, model::user::{user::User, user_dto::UserDTO}, schema::users};
+use crate::{database::db::get_connection, http::{middleware::auth_middleware::auth_middleware, requests::user::user_store_request::UserStoreRequest, responses::user::user_store_response::{UserStoreError, UserStoreResponse}}, model::user::{user::User, user_dto::UserDTO}, schema::users};
 
 pub async fn store(body: web::Json<UserStoreRequest>) -> impl Responder {
     let mut data = body.into_inner();
@@ -66,5 +66,6 @@ pub fn config(cfg: &mut ServiceConfig) {
     cfg.service(
 web::scope("/users")
             .route("/store", web::post().to(store))
+            .wrap(from_fn(auth_middleware))
     );
 }
