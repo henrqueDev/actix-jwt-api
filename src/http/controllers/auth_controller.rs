@@ -33,7 +33,7 @@ pub async fn login(body: web::Json<AuthLoginRequest>) -> impl Responder {
                     message: String::from("Invalid email or password")
                 };
 
-                HttpResponse::Unauthorized()
+                HttpResponse::NotFound()
                     .content_type(ContentType::json())
                     .json(response)
             }
