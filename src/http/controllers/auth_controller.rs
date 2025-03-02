@@ -12,31 +12,43 @@ pub async fn login(body: web::Json<AuthLoginRequest>) -> impl Responder {
         .filter(users::email.eq(&body.email))
         .select(User::as_select())
         .get_result::<User>(conn)
-        .await
-        .expect("Error getting user for login");
+        .await;
 
-    let result = bcrypt::verify(body.password.as_bytes(),&get_user.password).unwrap();
-    
-    if result == true {
+    match get_user {
+        Ok(user) => {
+            let result = bcrypt::verify(body.password.as_bytes(),&user.password).unwrap();
+            if result == true {
 
-        let token = encode_jwt(get_user.email);        
-        let response = AuthLoginResponse{
-            message: String::from("Login successful"),
-            token: Some(token)
-        }; 
+                let token = encode_jwt(user.email);        
+                let response = AuthLoginResponse{
+                    message: String::from("Login successful"),
+                    token: Some(token)
+                }; 
 
-        HttpResponse::Ok()
-            .content_type(ContentType::json())
-            .json(response)
-    } else {
-        let response = AuthLoginError{
-            message: String::from("Invalid email or password")
-        };
+                HttpResponse::Ok()
+                    .content_type(ContentType::json())
+                    .json(response)
+            } else {
+                let response = AuthLoginError{
+                    message: String::from("Invalid email or password")
+                };
 
-        HttpResponse::Unauthorized()
-            .content_type(ContentType::json())
-            .json(response)
+                HttpResponse::Unauthorized()
+                    .content_type(ContentType::json())
+                    .json(response)
+            }
+        },
+        Err(_error) => {
+            let response = AuthLoginError{
+                message: String::from("Invalid email or password")
+            };
+
+            HttpResponse::NotFound()
+                    .content_type(ContentType::json())
+                    .json(response)
+        }
     }
+    
 }
 
     
@@ -62,6 +74,6 @@ pub async fn validate_token(req: HttpRequest) -> impl Responder {
 pub fn config(cfg: &mut ServiceConfig) {
     cfg.service(web::scope("/auth")
         .route("/login", web::post().to(login))
-        .route("/validate-token", web::post().to(validate_token))
+        .route("/validateToken", web::post().to(validate_token))
     );
 }
