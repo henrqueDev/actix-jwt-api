@@ -5,7 +5,7 @@ use dotenv_codegen::dotenv;
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Claims {
     iss: String,
-    sub: String,
+    pub sub: String,
     aud: String,
     exp: u64,
 }
