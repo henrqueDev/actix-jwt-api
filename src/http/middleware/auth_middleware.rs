@@ -4,8 +4,10 @@ use actix_web::{
     middleware::Next,
     Error,
 };
+use diesel::{ExpressionMethods, QueryDsl, SelectableHelper};
+use diesel_async::RunQueryDsl;
 
-use crate::services::auth::decode_jwt;
+use crate::{database::db::get_connection, model::user::user::User, schema::users, services::auth::decode_jwt};
 
 pub async fn auth_middleware(
     req: ServiceRequest,
@@ -15,8 +17,23 @@ pub async fn auth_middleware(
     if let Some(token) = req.headers().get("Authorization") {
 
         match decode_jwt(token.to_str().expect("Error casting headervalue to &str")) {
-            Ok(_claim) => {
-                return next.call(req).await;
+            Ok(claim) => {
+                let conn = &mut get_connection().await.unwrap();
+                
+                let find_user = users::table
+                    .filter(users::email.eq(&claim.sub))
+                    .select(User::as_select())
+                    .get_result::<User>(conn)
+                    .await;
+
+                match find_user {
+                    Ok(_user) => next.call(req).await,
+                    Err(_error) => {
+                        let error = Err("No user logged!");
+                        return error.map_err(|e| actix_web::error::ErrorBadRequest(e))?;
+                    }
+                }
+                
             },
             Err(_error) => {
                 let error = Err("No user logged!");

@@ -58,16 +58,30 @@ pub async fn validate_token(req: HttpRequest) -> impl Responder {
     let token = req.headers().get("Authorization").unwrap();
     match decode_jwt(token.to_str().expect("Error casting headervalue to &str")) {
         Ok(claim) => {
-            return HttpResponse::Ok()
-                .content_type(ContentType::json())
-                .json(claim);
+
+            let conn = &mut get_connection().await.unwrap();
+                
+            let find_user = users::table
+                .filter(users::email.eq(&claim.sub))
+                .select(User::as_select())
+                .get_result::<User>(conn)
+                .await;
+
+            match find_user {
+                Ok(_user) => HttpResponse::Ok().content_type(ContentType::json()).json(claim),
+                Err(_error) => {
+                    HttpResponse::Unauthorized()
+                        .content_type(ContentType::json())
+                        .json("No user logged!".to_string())
+                }
+            }
         },
-        Err(error) => {
+        Err(_error) => {
             return HttpResponse::Unauthorized()
                 .content_type(ContentType::json())
-                .json(error.to_string());
+                .json("No user logged!".to_string());
         }
-    };
+    }
 
 }
 
