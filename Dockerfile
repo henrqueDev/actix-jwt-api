@@ -32,9 +32,9 @@ RUN apt-get update && \
 WORKDIR /app
 
 # Copy the built binary from the previous stage
-COPY --from=builder /app/target/release/pethotel-api ./
+COPY --from=builder /app/target/release/${APP_NAME} ./
 
 EXPOSE 8080
 
 # Command to run the application
-CMD ["./pethotel-api"]
+CMD ["./${APP_NAME}"]

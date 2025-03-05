@@ -59,6 +59,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "actix-jwt-api"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "bcrypt",
+ "chrono",
+ "diesel",
+ "diesel-async",
+ "diesel_migrations",
+ "dotenv",
+ "dotenv_codegen",
+ "dotenvy",
+ "jsonwebtoken",
+ "lazy_static",
+ "serde",
+ "time",
+]
+
+[[package]]
 name = "actix-macros"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1315,25 +1334,6 @@ name = "percent-encoding"
 version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
-
-[[package]]
-name = "pethotel-api"
-version = "0.1.0"
-dependencies = [
- "actix-web",
- "bcrypt",
- "chrono",
- "diesel",
- "diesel-async",
- "diesel_migrations",
- "dotenv",
- "dotenv_codegen",
- "dotenvy",
- "jsonwebtoken",
- "lazy_static",
- "serde",
- "time",
-]
 
 [[package]]
 name = "phf"

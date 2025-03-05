@@ -11,7 +11,6 @@ services:
       - "${DB_PORT}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-
   app:
     build:
       dockerfile: Dockerfile
@@ -21,7 +20,7 @@ services:
       - postgres
     ports:
       - "${APP_PORT}:8080"
-    command: ["./pethotel-api"]
+    command: ["./${APP_NAME}"]
 
 volumes:
   postgres_data:

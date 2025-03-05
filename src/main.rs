@@ -1,13 +1,13 @@
 use actix_web::{get, App, HttpResponse, HttpServer, Responder};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
-use pethotel_api::{database::db::get_connection_sync, http::controllers::{auth_controller, user_controller}};
+use actix_jwt_api::{database::db::get_connection_sync, http::controllers::{auth_controller, user_controller}};
 use dotenv_codegen::dotenv;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("./migrations");
 
 #[get("/")]
 async fn check_running() -> impl Responder {
-    HttpResponse::Ok().body("Welcome to PetHotel API!")
+    HttpResponse::Ok().body(format!("Welcome to {:#?}", dotenv!("APP_NAME")))
 }
 
 #[actix_web::main]

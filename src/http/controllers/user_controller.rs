@@ -132,7 +132,10 @@ pub fn config(cfg: &mut ServiceConfig) {
     cfg.service(
 web::scope("/users")
             .route("/store", web::post().to(store))
-            .route("/deleteMyAccount", web::delete().to(delete_my_account))
-            .wrap(from_fn(auth_middleware))
+            .service(web::resource("/deleteMyAccount")
+                .route(web::delete().to(delete_my_account))
+                .wrap(from_fn(auth_middleware))
+            )
     );
+
 }
