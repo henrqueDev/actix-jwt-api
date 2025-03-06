@@ -3,7 +3,7 @@ use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use crate::schema::users;
 
-#[derive(Insertable, Debug, PartialEq, Serialize, Deserialize, Clone)]
+#[derive(Insertable, Debug, PartialEq, Serialize, Deserialize, Clone, AsChangeset)]
 #[diesel(table_name = users)]
 pub struct UserDTO {
     pub name: String,
