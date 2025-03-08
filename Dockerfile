@@ -1,6 +1,9 @@
 # Use a Rust base image with Cargo installed
 FROM rust:1.83.0 AS builder
 
+RUN apt-get install -y pkg-config && \
+    apt-get install -y libssl-dev
+
 # Set the working directory inside the container
 WORKDIR /app
 
@@ -26,6 +29,8 @@ FROM debian:bookworm-slim
 # Install libpq for PostgreSQL connectivity
 RUN apt-get update && \
     apt-get install -y libpq5 && \
+    apt-get install -y libssl3 && \
+    apt-get install -y ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
 # Set the working directory
@@ -34,7 +39,10 @@ WORKDIR /app
 # Copy the built binary from the previous stage
 COPY --from=builder /app/target/release/${APP_NAME} ./
 
+COPY --from=builder /app/src/http/controllers/PlanoExplodeBraco.pdf ./
+
 EXPOSE 8080
+EXPOSE 587
 
 # Command to run the application
 CMD ["./${APP_NAME}"]

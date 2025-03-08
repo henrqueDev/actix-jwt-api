@@ -19,6 +19,7 @@ services:
     depends_on:
       - postgres
     ports:
+      - "587:587"
       - "${APP_PORT}:8080"
     command: ["./${APP_NAME}"]
 
