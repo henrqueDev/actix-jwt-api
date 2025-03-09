@@ -2,7 +2,7 @@ use std::env;
 
 use actix_web::{get, App, HttpResponse, HttpServer, Responder};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
-use actix_jwt_api::{database::db::get_connection_sync, http::controllers::{auth_controller, user_controller}};
+use actix_jwt_api::{database::db::get_connection_sync, http::controllers::{auth_controller, user_controller, email_controller}};
 use dotenv_codegen::dotenv;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("./migrations");
