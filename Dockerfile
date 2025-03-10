@@ -39,8 +39,6 @@ WORKDIR /app
 # Copy the built binary from the previous stage
 COPY --from=builder /app/target/release/${APP_NAME} ./
 
-COPY --from=builder /app/src/http/controllers/PlanoExplodeBraco.pdf ./
-
 EXPOSE 8080
 EXPOSE 587
 
