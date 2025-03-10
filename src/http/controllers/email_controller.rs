@@ -8,16 +8,17 @@ use lettre::message::header::ContentType as EmailContentType;
 
 pub async fn send(body: MultipartForm<EmailSendRequestFormData>) -> impl Responder {
 
-    let data = body.into_inner();
+    let data = &body;
+    let filename = &data.file.file_name.clone().unwrap_or_else(|| "anexo".to_owned());
+    let file_bytes = &data.file.data.to_vec();
     
     let user_email = dotenv!("EMAIL");
     let user_receiver = &data.to;
     let password = dotenv!("GOOGLE_TOKEN");
 
-    let filename = String::from("PlanoExplodeBraco.pdf");
-    let filebody = fs::read("./PlanoExplodeBraco.pdf").expect("Error opening pdf");
-    let content_type = EmailContentType::parse("application/pdf").unwrap();
-    let attachment = Attachment::new(filename).body(filebody, content_type);
+    let content_type = EmailContentType::parse("application/octet-stream").unwrap();
+    let attachment = Attachment::new(filename.to_owned())
+        .body(file_bytes.to_owned(), content_type);
     
     let text_body = SinglePart::builder().header(header::ContentType::TEXT_PLAIN).body(data.content.clone());
     let multipart_body = MultiPart::mixed().singlepart(attachment).singlepart(text_body);
