@@ -1,13 +1,12 @@
-use std::fs;
-
+use actix_multipart::form::MultipartForm;
 use actix_web::{http::header::ContentType, middleware::from_fn, web::{self, ServiceConfig}, HttpResponse, Responder};
 use lettre::{message::{Attachment, MultiPart, SinglePart}, transport::smtp::authentication::{Credentials, Mechanism}, Message, SmtpTransport, Transport};
-use crate::http::{middleware::auth_middleware::auth_middleware, requests::email::email_send_request::EmailSendRequest, responses::email::email_sent_response::{EmailSendError, EmailSentResponse}};
+use crate::http::{middleware::auth_middleware::auth_middleware, requests::email::email_send_request::{EmailSendRequest, EmailSendRequestFormData}, responses::email::email_sent_response::{EmailSendError, EmailSentResponse}};
 use dotenv_codegen::dotenv;
 use lettre::message::header;
 use lettre::message::header::ContentType as EmailContentType;
 
-pub async fn send(body: web::Json<EmailSendRequest>) -> impl Responder {
+pub async fn send(body: MultipartForm<EmailSendRequestFormData>) -> impl Responder {
 
     let data = body.into_inner();
     
