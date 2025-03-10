@@ -12,7 +12,7 @@ pub struct EmailSendRequest {
 #[derive(Debug, MultipartForm)]
 pub struct EmailSendRequestFormData {
     #[multipart(limit = "10MB")]
-    pub file: Bytes,
+    pub files: Vec<Bytes>,
     pub title: Text<String>,
     pub content: Text<String>,
     pub to: Text<String>
