@@ -11,11 +11,11 @@ pub async fn send(body: MultipartForm<EmailSendRequestFormData>) -> impl Respond
     let data = &body;
     let filename = &data.file.file_name.clone().unwrap_or_else(|| "anexo".to_owned());
     let file_bytes = &data.file.data.to_vec();
-    
+
     let user_email = dotenv!("EMAIL");
     let user_receiver = &data.to;
     let password = dotenv!("GOOGLE_TOKEN");
-
+    
     let content_type = EmailContentType::parse("application/octet-stream").unwrap();
     let attachment = Attachment::new(filename.to_owned())
         .body(file_bytes.to_owned(), content_type);
@@ -41,7 +41,11 @@ pub async fn send(body: MultipartForm<EmailSendRequestFormData>) -> impl Respond
             .content_type(ContentType::json())
             .json(EmailSentResponse {
                 message: "Email sent successfully!",
-                email: &data
+                email: & EmailSendRequest {
+                    title: data.title.to_string(),
+                    content: data.content.to_string(),
+                    to: data.to.to_string()
+                }
             }),
         Err(e) => HttpResponse::BadGateway()
             .content_type(ContentType::json())
