@@ -4,7 +4,7 @@
 </p>
 
 ## Descrição
-Esse é um projeto simples de API desenvolvido em Rust, usando o framework Actix e o ORM Diesel.
+Esse é um projeto simples de API com autenticação sem estado via Json Web Token (JWT). Desenvolvido em Rust, usando o framework Actix e o ORM Diesel.
 # Como rodar o projeto
 ## Pré-requisitos
 - Rustc v1.83
