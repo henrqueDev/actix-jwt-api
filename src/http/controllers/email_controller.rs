@@ -9,19 +9,23 @@ use lettre::message::header::ContentType as EmailContentType;
 pub async fn send(body: MultipartForm<EmailSendRequestFormData>) -> impl Responder {
 
     let data = &body;
-    let filename = &data.file.file_name.clone().unwrap_or_else(|| "anexo".to_owned());
-    let file_bytes = &data.file.data.to_vec();
+    let text_body = SinglePart::builder().header(header::ContentType::TEXT_PLAIN).body(data.content.clone());
+    let mut multipart_body = MultiPart::mixed().singlepart(text_body);
+
+    for file in &data.files {
+        let filename = file.file_name.clone().unwrap_or_else(|| "anexo".to_owned());
+        let file_bytes = file.data.to_vec();
+
+        let content_type = EmailContentType::parse("application/octet-stream").unwrap();
+        let attachment = Attachment::new(filename.to_owned())
+            .body(file_bytes.to_owned(), content_type);
+        
+        multipart_body = multipart_body.singlepart(attachment);
+    }
 
     let user_email = dotenv!("EMAIL");
     let user_receiver = &data.to;
     let password = dotenv!("GOOGLE_TOKEN");
-    
-    let content_type = EmailContentType::parse("application/octet-stream").unwrap();
-    let attachment = Attachment::new(filename.to_owned())
-        .body(file_bytes.to_owned(), content_type);
-    
-    let text_body = SinglePart::builder().header(header::ContentType::TEXT_PLAIN).body(data.content.clone());
-    let multipart_body = MultiPart::mixed().singlepart(attachment).singlepart(text_body);
     
     let email = Message::builder()
         .from(user_email.parse().unwrap())
