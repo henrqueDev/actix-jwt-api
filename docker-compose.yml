@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:latest
-    container_name: postgres_db
+    container_name: postgres_actix_db
     restart: always
     environment:
       POSTGRES_USER: user
@@ -14,7 +14,7 @@ services:
   app:
     build:
       dockerfile: Dockerfile
-    container_name: rust_app
+    container_name: actix_jwt_api
     restart: always
     depends_on:
       - postgres
