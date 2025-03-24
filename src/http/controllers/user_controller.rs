@@ -1,9 +1,14 @@
 use actix_web::{http::header::ContentType, middleware::from_fn, web::{self, ServiceConfig}, HttpRequest, HttpResponse, Responder};
+use base32::{encode, Alphabet};
 use chrono::Utc;
 use diesel::{ ExpressionMethods, QueryDsl, SelectableHelper, TextExpressionMethods};
 use diesel_async::RunQueryDsl;
-use crate::{database::db::get_connection, http::{middleware::auth_middleware::auth_middleware, requests::user::{user_filter_request::UserFilterRequest, user_store_request::UserStoreRequest, user_update_request::UserUpdateRequest}, responses::{auth::auth_login_response::AuthLoginError, user::{user_delete_response::{UserDeleteError, UserDeleteResponse}, user_store_response::{UserStoreError, UserStoreResponse}}}}, model::user::{user::User, user_dto::UserDTO}, schema::users::{self}, services::auth::decode_jwt};
+use totp_rs::{Algorithm, Secret, TOTP};
+use crate::{database::db::get_connection, http::{middleware::auth_middleware::auth_middleware, requests::user::{user_filter_request::UserFilterRequest, user_store_request::UserStoreRequest, user_update_request::UserUpdateRequest}, responses::{auth::auth_login_response::AuthLoginError, user::{user_delete_response::{UserDeleteError, UserDeleteResponse}, user_enable2fa_response::UserEnable2FAResponse, user_store_response::{UserStoreError, UserStoreResponse}}}}, model::user::{user::User, user_dto::UserDTO}, schema::users::{self}, services::auth::decode_jwt};
 use crate::schema::users::dsl::*;
+use base64::{prelude::BASE64_STANDARD_NO_PAD, Engine};
+use rand::Rng;
+use dotenv_codegen::dotenv;
 
 pub async fn index(query_params: web::Query<UserFilterRequest>) -> impl Responder {
 
@@ -59,6 +64,9 @@ pub async fn store(body: web::Json<UserStoreRequest>) -> impl Responder {
         name: data.name, 
         email: data.email.clone(),
         password: data.password,
+        two_factor_secret: None,
+        two_factor_recovery_code: None,
+        two_factor_confirmed_at: None,
         created_at: Some(date_now), 
         updated_at: Some(date_now), 
         deleted_at: None
@@ -129,9 +137,12 @@ pub async fn update(path: web::Path<(i32, )>, body: web::Json<UserUpdateRequest>
                             name: body.name.clone(),
                             email: body.email.clone(),
                             password: new_password,
+                            two_factor_secret: user_found.two_factor_secret,
+                            two_factor_recovery_code: user_found.two_factor_recovery_code,
+                            two_factor_confirmed_at: user_found.two_factor_confirmed_at,
                             created_at: user_found.created_at,
                             updated_at: Some(date_now),
-                            deleted_at: None
+                            deleted_at: user_found.deleted_at
                         };
         
                         let updated_user = diesel::update(
@@ -238,6 +249,80 @@ pub async fn delete_my_account(req: HttpRequest) -> impl Responder{
     }
 }
 
+pub async fn enable_2fa(req: HttpRequest) -> impl Responder {
+    let token = req.headers().get("Authorization").unwrap();
+
+    match decode_jwt(token.to_str().expect("Error casting headervalue to &str")) {
+        Ok(claim) => {
+            
+            let conn = &mut get_connection().await.unwrap();
+
+            let user = users::table
+                .filter(users::email.eq(claim.sub))
+                .select(User::as_select())
+                .get_result::<User>(conn)
+                .await
+                .expect("User does not exists!");
+
+            let mut rng = rand::rng();
+            let mut random_bytes = [0u8; 32];
+            rng.fill(&mut random_bytes);
+
+            let app_name = dotenv!("APP_NAME");
+        
+            let random_code = BASE64_STANDARD_NO_PAD.encode(&random_bytes);
+            let base_32_code = encode(Alphabet::Rfc4648 { padding: true }, random_code.as_bytes());
+
+            let totp = TOTP::new(
+                Algorithm::SHA512,
+                6,
+                1,
+                30,
+                Secret::Encoded(base_32_code).to_bytes().unwrap(),
+                Some(app_name.to_string()),
+                user.email.clone()
+            ).unwrap();
+
+            let qrcode_base64 = totp.get_qr_base64().unwrap();
+            let setup_key = totp.get_secret_base32();
+            let date_now = Utc::now();
+
+            let new_updated_user = UserDTO {
+                name: user.name,
+                email: user.email,
+                password: user.password,
+                two_factor_secret: Some(setup_key.clone()),
+                two_factor_recovery_code: user.two_factor_recovery_code,
+                two_factor_confirmed_at: user.two_factor_confirmed_at,
+                created_at: user.created_at,
+                updated_at: Some(date_now),
+                deleted_at: user.deleted_at
+            };
+
+            diesel::update(users::table.filter(users::id.eq(user.id)))
+                .set(new_updated_user)
+                .execute(conn)
+                .await
+                .expect("Error setting 2FA code for user!");
+            
+            let response = UserEnable2FAResponse {
+                message: "QR Code and Config Key generated! Confirm code at /user/activate-2fa",
+                qrcode: qrcode_base64,
+                config_code: setup_key
+            }; 
+
+            HttpResponse::Ok().content_type(ContentType::json()).json(response)
+        },
+        Err(_err) => {
+            return HttpResponse::Unauthorized()
+                .content_type(ContentType::json())
+                .json("No user logged!".to_string());
+        }
+    }
+
+
+} 
+
 pub fn config(cfg: &mut ServiceConfig) {
     cfg.service(
 web::scope("/users")
@@ -246,6 +331,7 @@ web::scope("/users")
                 .route("/deleteMyAccount",web::delete().to(delete_my_account))
                 .route("/update/{id}", web::put().to(update))
                 .route("/index", web::get().to(index))
+                .route("/enable-2fa", web::get().to(enable_2fa))
                 .wrap(from_fn(auth_middleware))
             )
     );

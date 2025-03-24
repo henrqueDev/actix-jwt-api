@@ -20,3 +20,7 @@ lazy_static = "1.5.0"
 dotenv_codegen = "0.15.0"
 lettre = "0.11.14"
 lettre_email = "0.9.4"
+totp-rs = {version = "5.6.0", features = ["qr"] }
+rand = "0.9"
+base64 = "0.22"
+base32 = "0.5"
