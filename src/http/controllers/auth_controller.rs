@@ -4,7 +4,7 @@ use diesel::{ExpressionMethods, QueryDsl, SelectableHelper};
 use diesel_async::RunQueryDsl;
 use totp_rs::{Algorithm, Secret, TOTP};
 use dotenv_codegen::dotenv;
-use crate::{database::db::get_connection, http::{requests::auth::auth_login_request::AuthLoginRequest, responses::auth::auth_login_response::{AuthLoginError, AuthLoginResponse}, GenericResponse}, model::user::user::User, schema::users, services::auth::{decode_jwt, encode_jwt}};
+use crate::{database::db::get_connection, http::{requests::auth::auth_login_request::AuthLoginRequest, responses::auth::auth_login_response::{AuthLoginError, AuthLoginResponse}, GenericError, GenericResponse}, model::user::user::User, schema::users, services::auth::{decode_jwt, encode_jwt}};
 
 pub async fn login(body: web::Json<AuthLoginRequest>) -> impl Responder {
     
@@ -37,7 +37,7 @@ pub async fn login(body: web::Json<AuthLoginRequest>) -> impl Responder {
                                 user.email.clone()
                             ).unwrap();
 
-                            let code = &body.code.clone().unwrap();
+                            let code = &body.code.clone().unwrap_or_else(|| "".to_owned());
 
                             if totp.check(code, seconds_now) == true {
 
@@ -52,13 +52,26 @@ pub async fn login(body: web::Json<AuthLoginRequest>) -> impl Responder {
                                     .content_type(ContentType::json())
                                     .json(response)
                             } else {
-                                let response = GenericResponse {
-                                    message: "Missing 2FA code in request!"
-                                };
-
-                                HttpResponse::Unauthorized()
-                                    .content_type(ContentType::json())
-                                    .json(response)
+                                match code == "" {
+                                    true => {
+                                        let response = GenericResponse {
+                                            message: "Missing 2FA code in request!"
+                                        };
+        
+                                        HttpResponse::Unauthorized()
+                                            .content_type(ContentType::json())
+                                            .json(response)
+                                    },
+                                    false => {
+                                        let response = GenericResponse {
+                                            message: "2FA challenge failed! Try again."
+                                        };
+        
+                                        HttpResponse::BadRequest()
+                                            .content_type(ContentType::json())
+                                            .json(response)
+                                    }
+                                }
                             }
                         } else {
                             let response = AuthLoginError{
@@ -129,16 +142,27 @@ pub async fn validate_token(req: HttpRequest) -> impl Responder {
             match find_user {
                 Ok(_user) => HttpResponse::Ok().content_type(ContentType::json()).json(claim),
                 Err(_error) => {
+                    
+                    let user_not_found_response = GenericError {
+                        message: "No user Logged",
+                        error: Some("Some error raised on server side!")
+                    };
+
                     HttpResponse::Unauthorized()
                         .content_type(ContentType::json())
-                        .json("No user logged!".to_string())
+                        .json(user_not_found_response)
                 }
             }
         },
         Err(_error) => {
+            let error_response = GenericError {
+                message: "No user Logged",
+                error: Some("Some error raised on server side!")
+            };
+
             return HttpResponse::Unauthorized()
                 .content_type(ContentType::json())
-                .json("No user logged!".to_string());
+                .json(error_response);
         }
     }
 

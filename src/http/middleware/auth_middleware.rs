@@ -7,7 +7,7 @@ use actix_web::{
 use diesel::{ExpressionMethods, QueryDsl, SelectableHelper};
 use diesel_async::RunQueryDsl;
 
-use crate::{database::db::get_connection, model::user::user::User, schema::users, services::auth::decode_jwt};
+use crate::{database::db::get_connection, http::GenericError, model::user::user::User, schema::users, services::auth::decode_jwt};
 
 pub async fn auth_middleware(
     req: ServiceRequest,
@@ -29,20 +29,35 @@ pub async fn auth_middleware(
                 match find_user {
                     Ok(_user) => next.call(req).await,
                     Err(_error) => {
-                        let error = Err("No user logged!");
+                        let error_response = GenericError {
+                            message: "No user Logged!",
+                            error: Some("Some error raised on server side!")
+                        };
+        
+                        let error = Err(error_response);
                         return error.map_err(|e| actix_web::error::ErrorBadRequest(e))?;
                     }
                 }
                 
             },
             Err(_error) => {
-                let error = Err("No user logged!");
+                
+                let error_response = GenericError {
+                    message: "No user Logged!",
+                    error: Some("Some error raised on server side!")
+                };
+
+                let error = Err(error_response);
                 return error.map_err(|e| actix_web::error::ErrorBadRequest(e))?;
                 
             }
         }
     } else {
-        let error = Err("No user logged!");
+        let user_not_found_response = GenericError {
+            message: "No user Logged!",
+            error: Some("Authorization Header not found.")
+        };
+        let error = Err(user_not_found_response);
         return error.map_err(|e| actix_web::error::ErrorBadRequest(e))?;
 
     }
