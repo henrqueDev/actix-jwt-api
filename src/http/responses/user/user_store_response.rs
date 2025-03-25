@@ -2,13 +2,13 @@ use serde::{Deserialize, Serialize};
 use crate::model::user::user::User;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct UserStoreResponse {
-    pub message: String,
+pub struct UserStoreResponse<'a> {
+    pub message: &'a str,
     pub user: User
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct UserStoreError {
-    pub message: String,
-    pub error: String
+pub struct UserStoreError<'a> {
+    pub message: &'a str,
+    pub error: &'a str
 }

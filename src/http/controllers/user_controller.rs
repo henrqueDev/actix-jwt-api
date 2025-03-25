@@ -89,7 +89,7 @@ pub async fn store(body: web::Json<UserStoreRequest>) -> impl Responder {
                 .expect("Error trying get user stored");
 
             let response = UserStoreResponse{
-                message: String::from("User stored successfuly!"),
+                message: "User stored successfuly!",
                 user: user_created
             };
 
@@ -98,10 +98,11 @@ pub async fn store(body: web::Json<UserStoreRequest>) -> impl Responder {
                 .json(response);
         },
         Err(error) => {
+            let error_msg = error.to_string();
 
             let response = UserStoreError{
-                message: String::from("Error while trying store User!"),
-                error: error.to_string()
+                message: "Error while trying store User!",
+                error: &error_msg
             };
 
             return HttpResponse::InternalServerError()
@@ -199,18 +200,19 @@ pub async fn delete_my_account(req: HttpRequest) -> impl Responder{
                     Ok(rows) => {
                         if rows > 0 {
                             let response = UserDeleteResponse{
-                                message: String::from("Your user was deleted successfully!"),
-                                email: claim.sub
+                                message: "Your user was deleted successfully!",
+                                email: &claim.sub
                             };
             
                             return HttpResponse::Ok()
                                 .content_type(ContentType::json())
                                 .json(response);
                         } else {
-                            let message = String::from("No user was deleted because this user does not exist!");
-                            let error = String::from("Your user does not exist in our database!");
 
-                            let error_json = UserDeleteError {message, error};
+                            let error_json = UserDeleteError {
+                                message: "No user was deleted because this user does not exist!", 
+                                error: "Your user does not exist in our database!"
+                            };
         
                             return HttpResponse::NotFound()
                                 .content_type(ContentType::json())
@@ -218,9 +220,12 @@ pub async fn delete_my_account(req: HttpRequest) -> impl Responder{
                         }
                     },
                     Err(error) => {
-                        let message = format!("Some error raised deleting user");
+                        let error_msg = error.to_string();
 
-                        let error_json = UserDeleteError {message, error: error.to_string()};
+                        let error_json = UserDeleteError {
+                            message: "Some error raised deleting user", 
+                            error: &error_msg
+                        };
         
                         return HttpResponse::InternalServerError()
                             .content_type(ContentType::json())
@@ -307,8 +312,8 @@ pub async fn enable_2fa(req: HttpRequest) -> impl Responder {
             
             let response = UserEnable2FAResponse {
                 message: "QR Code and Config Key generated! Confirm code at /user/activate-2fa",
-                qrcode: qrcode_base64,
-                config_code: setup_key
+                qrcode: &qrcode_base64,
+                config_code: &setup_key
             }; 
 
             HttpResponse::Ok().content_type(ContentType::json()).json(response)
