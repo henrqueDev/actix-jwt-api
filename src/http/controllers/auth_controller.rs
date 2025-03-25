@@ -25,9 +25,7 @@ pub async fn login(body: web::Json<AuthLoginRequest>) -> impl Responder {
                         if result == true {
                             let app_name = dotenv!("APP_NAME");
 
-                            //let client_time = req.headers().get("X-Client-Time").unwrap().to_str().expect("Error convertendo header to str").to_string();
                             let seconds_now = ((Utc::now().timestamp_millis()) / 1000) as u64;
-                            // let client_time_seconds = (DateTime::parse_from_rfc3339().unwrap().timestamp_millis() / 1000) as u64;
                             
                             let totp = TOTP::new(
                                 Algorithm::SHA512,
