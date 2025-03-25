@@ -4,7 +4,7 @@ use chrono::Utc;
 use diesel::{ ExpressionMethods, QueryDsl, SelectableHelper, TextExpressionMethods };
 use diesel_async::RunQueryDsl;
 use totp_rs::{Algorithm, Secret, TOTP};
-use crate::{database::db::get_connection, http::{middleware::auth_middleware::auth_middleware, requests::user::{user_activate2fa_request::UserActivate2FARequest, user_filter_request::UserFilterRequest, user_store_request::UserStoreRequest, user_update_request::UserUpdateRequest}, responses::{auth::auth_login_response::AuthLoginError, user::{user_delete_response::{UserDeleteError, UserDeleteResponse}, user_enable2fa_response::UserEnable2FAResponse, user_store_response::{UserStoreError, UserStoreResponse}}}, GenericResponse}, model::user::{user::User, user_dto::UserDTO}, schema::users::{self}, services::auth::decode_jwt};
+use crate::{database::db::get_connection, http::{middleware::auth_middleware::auth_middleware, requests::user::{user_activate2fa_request::UserActivate2FARequest, user_filter_request::UserFilterRequest, user_store_request::UserStoreRequest, user_update_request::UserUpdateRequest}, responses::{auth::auth_login_response::AuthLoginError, user::{user_delete_response::{UserDeleteError, UserDeleteResponse}, user_enable2fa_response::UserEnable2FAResponse, user_store_response::{UserStoreError, UserStoreResponse}}}, GenericError, GenericResponse}, model::user::{user::User, user_dto::UserDTO}, schema::users::{self}, services::auth::decode_jwt};
 use crate::schema::users::dsl::*;
 use base64::{prelude::BASE64_STANDARD_NO_PAD, Engine};
 use rand::Rng;
@@ -245,8 +245,10 @@ pub async fn delete_my_account(req: HttpRequest) -> impl Responder{
             }
         }
     } else {
-        let error = String::from("No JWT Token was provided.");
-        let error_json = AuthLoginError {message: &error};
+        let error_json = GenericError {
+            message: "Error trying delete account!",
+            error: "No JWT Token was provided."
+        };
 
         return HttpResponse::BadRequest()
             .content_type(ContentType::json())
