@@ -1,12 +1,12 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct AuthLoginResponse {
-    pub message: String,
-    pub token: Option<String>
+pub struct AuthLoginResponse<'a> {
+    pub message: &'a str,
+    pub token: Option<&'a str>
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct AuthLoginError {
-    pub message: String
+pub struct AuthLoginError<'a> {
+    pub message: &'a str
 }

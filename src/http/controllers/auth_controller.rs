@@ -44,8 +44,8 @@ pub async fn login(body: web::Json<AuthLoginRequest>) -> impl Responder {
                                 let token = encode_jwt(user.email);        
                                 
                                 let response = AuthLoginResponse {
-                                    message: String::from("Login successful"),
-                                    token: Some(token)
+                                    message: "Login successful",
+                                    token: Some(&token)
                                 }; 
                 
                                 HttpResponse::Ok()
@@ -62,7 +62,7 @@ pub async fn login(body: web::Json<AuthLoginRequest>) -> impl Responder {
                             }
                         } else {
                             let response = AuthLoginError{
-                                message: String::from("Invalid email or password")
+                                message: "Invalid email or password"
                             };
             
                             HttpResponse::NotFound()
@@ -77,8 +77,8 @@ pub async fn login(body: web::Json<AuthLoginRequest>) -> impl Responder {
 
                         let token = encode_jwt(user.email);        
                         let response = AuthLoginResponse{
-                            message: String::from("Login successful"),
-                            token: Some(token)
+                            message: "Login successful",
+                            token: Some(&token)
                         }; 
         
                         HttpResponse::Ok()
@@ -86,7 +86,7 @@ pub async fn login(body: web::Json<AuthLoginRequest>) -> impl Responder {
                             .json(response)
                     } else {
                         let response = AuthLoginError{
-                            message: String::from("Invalid email or password")
+                            message: "Invalid email or password"
                         };
         
                         HttpResponse::NotFound()
@@ -99,7 +99,7 @@ pub async fn login(body: web::Json<AuthLoginRequest>) -> impl Responder {
         },
         Err(_error) => {
             let response = AuthLoginError{
-                message: String::from("Invalid email or password")
+                message: "Invalid email or password"
             };
 
             HttpResponse::NotFound()
