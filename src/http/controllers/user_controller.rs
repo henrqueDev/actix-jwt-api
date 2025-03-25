@@ -321,9 +321,14 @@ pub async fn enable_2fa(req: HttpRequest) -> impl Responder {
             HttpResponse::Ok().content_type(ContentType::json()).json(response)
         },
         Err(_err) => {
-            return HttpResponse::Unauthorized()
+            let error_response = GenericError {
+                message: "No user Logged!",
+                error: "Invalid Authorization token."
+            };
+
+            HttpResponse::Unauthorized()
                 .content_type(ContentType::json())
-                .json("No user logged!".to_string());
+                .json(error_response)
         }
     }
 
@@ -402,9 +407,14 @@ pub async fn activate_2fa(req: HttpRequest, body: web::Json<UserActivate2FAReque
 
         },
         Err(_err) => {
-            return HttpResponse::Unauthorized()
+            let error_response = GenericError {
+                message: "No user Logged!",
+                error: "Invalid Authorization token."
+            };
+
+            HttpResponse::Unauthorized()
                 .content_type(ContentType::json())
-                .json("No user logged!".to_string());
+                .json(error_response)
         }
     }
 }
