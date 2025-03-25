@@ -1,10 +1,10 @@
 use actix_web::{http::header::ContentType, middleware::from_fn, web::{self, ServiceConfig}, HttpRequest, HttpResponse, Responder};
 use base32::{encode, Alphabet};
 use chrono::Utc;
-use diesel::{ ExpressionMethods, QueryDsl, SelectableHelper, TextExpressionMethods};
+use diesel::{ ExpressionMethods, QueryDsl, SelectableHelper, TextExpressionMethods };
 use diesel_async::RunQueryDsl;
 use totp_rs::{Algorithm, Secret, TOTP};
-use crate::{database::db::get_connection, http::{middleware::auth_middleware::auth_middleware, requests::user::{user_filter_request::UserFilterRequest, user_store_request::UserStoreRequest, user_update_request::UserUpdateRequest}, responses::{auth::auth_login_response::AuthLoginError, user::{user_delete_response::{UserDeleteError, UserDeleteResponse}, user_enable2fa_response::UserEnable2FAResponse, user_store_response::{UserStoreError, UserStoreResponse}}}}, model::user::{user::User, user_dto::UserDTO}, schema::users::{self}, services::auth::decode_jwt};
+use crate::{database::db::get_connection, http::{middleware::auth_middleware::auth_middleware, requests::user::{user_activate2fa_request::UserActivate2FARequest, user_filter_request::UserFilterRequest, user_store_request::UserStoreRequest, user_update_request::UserUpdateRequest}, responses::{auth::auth_login_response::AuthLoginError, user::{user_delete_response::{UserDeleteError, UserDeleteResponse}, user_enable2fa_response::UserEnable2FAResponse, user_store_response::{UserStoreError, UserStoreResponse}}}, GenericResponse}, model::user::{user::User, user_dto::UserDTO}, schema::users::{self}, services::auth::decode_jwt};
 use crate::schema::users::dsl::*;
 use base64::{prelude::BASE64_STANDARD_NO_PAD, Engine};
 use rand::Rng;
@@ -320,8 +320,87 @@ pub async fn enable_2fa(req: HttpRequest) -> impl Responder {
         }
     }
 
-
 } 
+
+pub async fn activate_2fa(req: HttpRequest, body: web::Json<UserActivate2FARequest>) -> impl Responder {
+    let token = req.headers().get("Authorization").unwrap();
+
+    
+    match decode_jwt(token.to_str().expect("Error casting headervalue to &str")) {
+        Ok(claim) => {
+            
+            let conn = &mut get_connection().await.unwrap();
+
+            let user = users::table
+                .filter(users::email.eq(claim.sub))
+                .select(User::as_select())
+                .get_result::<User>(conn)
+                .await
+                .expect("User does not exists!");
+
+            match user.two_factor_secret {
+                    Some(secret) => {
+                        let date_now = Utc::now();
+                        let app_name = dotenv!("APP_NAME");
+
+                        let totp = TOTP::new(
+                            Algorithm::SHA512,
+                            6,
+                            1,
+                            30,
+                            Secret::Encoded(secret.clone()).to_bytes().unwrap(),
+                            Some(app_name.to_string()),
+                            user.email.clone()
+                        ).unwrap();
+
+                        let seconds_now = ((Utc::now().timestamp_millis()) / 1000) as u64;
+
+                        if totp.check(body.code.as_str(), seconds_now) == true {
+                            let new_updated_user = UserDTO {
+                                name: user.name,
+                                email: user.email,
+                                password: user.password,
+                                two_factor_secret:  Some(secret),
+                                two_factor_recovery_code: user.two_factor_recovery_code,
+                                two_factor_confirmed_at: Some(date_now),
+                                created_at: user.created_at,
+                                updated_at: Some(date_now),
+                                deleted_at: user.deleted_at
+                            };
+                
+                            diesel::update(users::table.filter(users::id.eq(user.id)))
+                                .set(new_updated_user)
+                                .execute(conn)
+                                .await
+                                .expect("Error setting 2FA code for user!");
+                            
+                            let response = GenericResponse {
+                                message: "2FA setted up successfully!"
+                            }; 
+                
+                            HttpResponse::Ok().content_type(ContentType::json()).json(response)
+                        } else {
+                            HttpResponse::Unauthorized()
+                                .content_type(ContentType::json())
+                                .json("User failed the 2FA challenge code!".to_string())
+                        }
+
+                    },
+                    None => {
+                        HttpResponse::Unauthorized()
+                            .content_type(ContentType::json())
+                            .json("User did not request 2FA challenge!".to_string())
+                    }
+            }
+
+        },
+        Err(_err) => {
+            return HttpResponse::Unauthorized()
+                .content_type(ContentType::json())
+                .json("No user logged!".to_string());
+        }
+    }
+}
 
 pub fn config(cfg: &mut ServiceConfig) {
     cfg.service(
@@ -332,6 +411,7 @@ web::scope("/users")
                 .route("/update/{id}", web::put().to(update))
                 .route("/index", web::get().to(index))
                 .route("/enable-2fa", web::get().to(enable_2fa))
+                .route("/activate-2fa", web::post().to(activate_2fa))
                 .wrap(from_fn(auth_middleware))
             )
     );
