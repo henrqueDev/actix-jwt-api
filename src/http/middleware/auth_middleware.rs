@@ -31,7 +31,7 @@ pub async fn auth_middleware(
                     Err(_error) => {
                         let error_response = GenericError {
                             message: "No user Logged!",
-                            error: Some("Some error raised on server side!")
+                            error: "Some error raised on server side!"
                         };
         
                         let error = Err(error_response);
@@ -44,7 +44,7 @@ pub async fn auth_middleware(
                 
                 let error_response = GenericError {
                     message: "No user Logged!",
-                    error: Some("Some error raised on server side!")
+                    error: "Some error raised on server side!"
                 };
 
                 let error = Err(error_response);
@@ -55,7 +55,7 @@ pub async fn auth_middleware(
     } else {
         let user_not_found_response = GenericError {
             message: "No user Logged!",
-            error: Some("Authorization Header not found.")
+            error: "Authorization Header not found."
         };
         let error = Err(user_not_found_response);
         return error.map_err(|e| actix_web::error::ErrorBadRequest(e))?;

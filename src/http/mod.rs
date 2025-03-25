@@ -15,11 +15,11 @@ pub struct GenericResponse<'a> {
 #[derive(Debug, Serialize)]
 pub struct GenericError<'a> {
     pub message: &'a str,
-    pub error: Option<&'a str>
+    pub error: &'a str
 }
 
 impl Display for GenericError<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{{ \"message\":{:#?}, \"error\":{:#?} }}", self.message, self.error.unwrap_or_else(|| ""))
+        write!(f, "{{ \"message\":{:#?}, \"error\":{:#?} }}", self.message, self.error)
     }
 }

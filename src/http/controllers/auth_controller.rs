@@ -145,7 +145,7 @@ pub async fn validate_token(req: HttpRequest) -> impl Responder {
                     
                     let user_not_found_response = GenericError {
                         message: "No user Logged",
-                        error: Some("Some error raised on server side!")
+                        error: "Some error raised on server side!"
                     };
 
                     HttpResponse::Unauthorized()
@@ -157,7 +157,7 @@ pub async fn validate_token(req: HttpRequest) -> impl Responder {
         Err(_error) => {
             let error_response = GenericError {
                 message: "No user Logged",
-                error: Some("Some error raised on server side!")
+                error: "Some error raised on server side!"
             };
 
             return HttpResponse::Unauthorized()
