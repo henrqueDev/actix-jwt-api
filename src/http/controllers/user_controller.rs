@@ -348,8 +348,10 @@ pub async fn enable_2fa(req: HttpRequest) -> impl Responder {
                 .filter(users::email.eq(claim.sub))
                 .select(User::as_select())
                 .get_result::<User>(conn)
-                .await
-                .expect("User does not exists!");
+                .await;
+
+            match user {
+                Ok(user)=> {
 
             let mut rng = rand::rng();
             let mut random_bytes = [0u8; 32];
@@ -398,7 +400,20 @@ pub async fn enable_2fa(req: HttpRequest) -> impl Responder {
                 config_code: &setup_key
             }; 
 
-            HttpResponse::Ok().content_type(ContentType::json()).json(response)
+                    return HttpResponse::Ok().content_type(ContentType::json()).json(response);
+                },
+                Err(_error)=>{
+                    let res_err = UserUpdateError {
+                        message: "Error trying setting 2FA code for user!",
+                        error: "User not found"
+                    };
+        
+                    return HttpResponse::BadRequest()
+                        .content_type(ContentType::json())
+                        .json(res_err);
+                }
+            }
+
         },
         Err(_err) => {
             let error_response = GenericError {
