@@ -142,12 +142,13 @@ pub async fn store(body: web::Json<UserStoreRequest>) -> impl Responder {
     }
 }
 
-pub async fn update(path: web::Path<(i32, )>, body: web::Json<UserUpdateRequest>) -> impl Responder {
+pub async fn update(path: web::Path<i32>, body: web::Json<UserUpdateRequest>) -> impl Responder {
 
     let conn = &mut get_connection().await.unwrap();
 
-    let find_user = users::table
-        .filter(users::id.eq(path.into_inner().0))
+    // Consulta o usuario no banco pelo ID passado no path do endpoint
+    let find_user  = users::table
+        .filter(users::id.eq(path.into_inner()))
         .select(User::as_select())
         .get_result::<User>(conn)
         .await;
