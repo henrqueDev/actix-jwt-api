@@ -153,63 +153,111 @@ pub async fn update(path: web::Path<i32>, body: web::Json<UserUpdateRequest>) ->
         .get_result::<User>(conn)
         .await;
 
-    let date_now = Utc::now();
-
     match find_user {
         Ok(user_found) => {
-            match bcrypt::verify(&body.old_password, &user_found.password) {
-                Ok(result) => {
-                    if result == true {
-                        let new_password = match bcrypt::hash(body.new_password.clone(), 10){
-                            Ok(password_data) => password_data,
-                            Err(_err) => panic!("Error while bcrypt password")
-                        };
-    
-                        let new_updated_user = UserDTO {
-                            name: body.name.clone(),
-                            email: body.email.clone(),
-                            password: new_password,
+
+            let mut new_updated_user = UserDTO {
+                name: user_found.name,
+                email: user_found.email,
+                password: user_found.password.clone(),
                             two_factor_secret: user_found.two_factor_secret,
                             two_factor_recovery_code: user_found.two_factor_recovery_code,
                             two_factor_confirmed_at: user_found.two_factor_confirmed_at,
                             created_at: user_found.created_at,
-                            updated_at: Some(date_now),
+                updated_at: user_found.updated_at,
                             deleted_at: user_found.deleted_at
                         };
         
+            match &body.old_password {
+                Some(old_password) => {
+                    match bcrypt::verify(old_password, &user_found.password) {
+                        Ok(result) => {
+    
+                            if result == true {
+    
+                                let new_password = match bcrypt::hash(body.new_password.clone().unwrap(), 10){
+                                    Ok(password_data) => password_data,
+                                    Err(_err) => panic!("Error while encrypt password")
+                                };
+    
+                                new_updated_user.password = new_password;
+                        
+                            } else {
+                                return HttpResponse::BadRequest()
+                                    .content_type(ContentType::json())
+                                    .json("Password confirmation gone wrong!");
+                            }
+                        },
+                        Err(err) => {
+                            let err_msg = err.to_string();
+
+                            let res_bcrypt_err = UserUpdateError {
+                                message: "Server wasnt able to parse old Password to confirm!",
+                                error: &err_msg
+                            };
+
+                            return HttpResponse::BadRequest()
+                                .content_type(ContentType::json())
+                                .json(res_bcrypt_err);
+                        }
+                    };
+                },
+                None => {},
+            }
+
+            // Verificar se o campo de nome foi passado na requisição
+            match &body.name {
+                Some(new_name) => {new_updated_user.name = new_name.to_owned()},
+                None => {},
+            }
+
+            match &body.email {
+                Some(new_email) => {new_updated_user.email = new_email.to_owned()},
+                None => {},
+            }
+
+            // Setar o horario do update com o tempo universal coordenado sem offset de fuso horario (Revisar)
+            new_updated_user.updated_at = Some(Utc::now());
+
+            // Query para atualizar o usuario
                         let updated_user = diesel::update(
                             users::table.filter(users::id.eq(user_found.id))
                         ).set(new_updated_user).get_result::<User>(conn).await;
         
                         match updated_user {
                             Ok(user) => {
+                    let res_updated_success = UserUpdateResponse {
+                        message: "User updated successfully!",
+                        user
+                    };
+                    
                                 HttpResponse::Ok()
                                     .content_type(ContentType::json())
-                                    .json(user)
+                        .json(res_updated_success)
                             },
                             Err(_error) => {
+                    let res_err = UserUpdateError {
+                        message: "Error trying update user!",
+                        error: "Internal Server error"
+                    };
+
                                 HttpResponse::BadRequest()
                                 .content_type(ContentType::json())
-                                .json("Something gone wrong updating user!")
-                            }
-                        }
-                
-                    } else {
-                        HttpResponse::BadRequest()
-                            .content_type(ContentType::json())
-                            .json("Password confirmation gone wrong!")
-                    }
-                },
-                Err(_err) => HttpResponse::BadRequest()
-                .content_type(ContentType::json())
-                .json("Password confirmation gone wrong!")
+                    .json(res_err)
+                }
             }
-            
 
         },
-        Err(_err) => HttpResponse::BadRequest()
-            .content_type(ContentType::json())
-            .json("User not found!")
+        Err(_err) => {
+            let res_err = UserUpdateError {
+                message: "Error trying update user!",
+                error: "User not found"
+            };
+
+                        HttpResponse::BadRequest()
+                            .content_type(ContentType::json())
+                .json(res_err)
+        }
     }
 
     
