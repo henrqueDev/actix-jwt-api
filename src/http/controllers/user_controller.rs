@@ -82,11 +82,13 @@ pub async fn index(query_params: web::Query<UserFilterRequest>) -> impl Responde
 pub async fn store(body: web::Json<UserStoreRequest>) -> impl Responder {
     let mut data = body.into_inner();
     
+    // Gerar hash da senha passada no body
     data.password = match bcrypt::hash(&data.password, 10) {
         Ok(password_data) => password_data,
         Err(_err) => panic!("Error while bcrypt password")
     };
 
+    // Pegar a hora atual
     let date_now = Utc::now();
 
     let new_user = UserDTO{
@@ -102,26 +104,23 @@ pub async fn store(body: web::Json<UserStoreRequest>) -> impl Responder {
     };
 
     let conn = &mut get_connection().await.unwrap();
+    
+    // Query para criar o usuário
     let create_user = diesel::insert_into(users::table)
-        .values(new_user)
-        .execute(conn)
+        .values(&new_user)
+        .get_result::<User>(conn)
         .await;
 
     match create_user {
-        Ok(_s) => {
+        Ok(user_created) => {
 
-            let user_created = users::table
-                .filter(users::email.eq(data.email))
-                .select(User::as_select())
-                .get_result::<User>(conn)
-                .await
-                .expect("Error trying get user stored");
-
+            // Preparar dados da resposta
             let response = UserStoreResponse{
                 message: "User stored successfuly!",
                 user: user_created
             };
 
+            // Resposta com status 200
             return HttpResponse::Ok()
                 .content_type(ContentType::json())
                 .json(response);
@@ -129,11 +128,13 @@ pub async fn store(body: web::Json<UserStoreRequest>) -> impl Responder {
         Err(error) => {
             let error_msg = error.to_string();
 
+            // Preparar dados do erro interno para a resposta
             let response = UserStoreError{
                 message: "Error while trying store User!",
                 error: &error_msg
             };
 
+            // Retornar dados com status 500
             return HttpResponse::InternalServerError()
                 .content_type(ContentType::json())
                 .json(response);
