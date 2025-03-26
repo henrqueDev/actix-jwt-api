@@ -5,7 +5,7 @@ use crate::model::user::user_dto::UserDTOMin;
 pub struct UserIndexResponse<'a> {
     pub message: &'a str,
     pub users: Vec<UserDTOMin>,
-    pub page: Option<u32>,
+    pub current_page: Option<u32>,
     pub per_page: Option<u32>
 }
 
