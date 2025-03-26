@@ -4,7 +4,7 @@ use chrono::Utc;
 use diesel::{ ExpressionMethods, QueryDsl, SelectableHelper, TextExpressionMethods };
 use diesel_async::RunQueryDsl;
 use totp_rs::{Algorithm, Secret, TOTP};
-use crate::{database::db::get_connection, http::{middleware::auth_middleware::auth_middleware, requests::user::{user_activate2fa_request::UserActivate2FARequest, user_filter_request::UserFilterRequest, user_store_request::UserStoreRequest, user_update_request::UserUpdateRequest}, responses::{auth::auth_login_response::AuthLoginError, user::{user_delete_response::{UserDeleteError, UserDeleteResponse}, user_enable2fa_response::UserEnable2FAResponse, user_store_response::{UserStoreError, UserStoreResponse}}}, GenericError, GenericResponse}, model::user::{user::User, user_dto::UserDTO}, schema::users::{self}, services::auth::decode_jwt};
+use crate::{database::db::get_connection, http::{middleware::auth_middleware::auth_middleware, requests::user::{user_activate2fa_request::UserActivate2FARequest, user_filter_request::UserFilterRequest, user_store_request::UserStoreRequest, user_update_request::UserUpdateRequest}, responses::{auth::auth_login_response::AuthLoginError, user::{user_delete_response::{UserDeleteError, UserDeleteResponse}, user_enable2fa_response::UserEnable2FAResponse, user_index_response::UserIndexResponse, user_store_response::{UserStoreError, UserStoreResponse}}}, GenericError, GenericResponse}, model::user::{user::User, user_dto::{UserDTO, UserDTOMin}}, schema::users::{self}, services::auth::decode_jwt};
 use crate::schema::users::dsl::*;
 use base64::{prelude::BASE64_STANDARD_NO_PAD, Engine};
 use rand::Rng;
@@ -39,14 +39,34 @@ pub async fn index(query_params: web::Query<UserFilterRequest>) -> impl Responde
         query = query.limit(per_page as i64).offset(offset_num);
     }
 
-
-    let results = query.select(User::as_select()).get_results::<User>(conn).await;
+    let results = query
+        .select(UserDTOMin::as_select())
+        .get_results::<UserDTOMin>(conn)
+        .await;
 
     match results {
-        Ok(query_users) => HttpResponse::Ok().content_type(ContentType::json()).json(query_users),
-        Err(_err) => HttpResponse::InternalServerError()
+        Ok(query_users) => {
+            let users_response = UserIndexResponse {
+                message: "Query users gone successfully!",
+                users: query_users,
+                page: query_params.0.page,
+                per_page: query_params.0.per_page
+            };
+
+            HttpResponse::Ok().content_type(ContentType::json()).json(users_response)
+        },
+        Err(err) => {
+            let error_msg = err.to_string();
+
+            let error_response = GenericError {
+                message: "Error querying users on DB!",
+                error: &error_msg
+            };
+
+            HttpResponse::InternalServerError()
             .content_type(ContentType::json())
-            .json("Error querying users on DB!")
+            .json(error_response)
+        }
     }
 }
 

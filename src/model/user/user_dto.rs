@@ -16,3 +16,14 @@ pub struct UserDTO {
     pub updated_at: Option<DateTime<Utc>>,
     pub deleted_at: Option<DateTime<Utc>>
 }
+
+
+#[derive(Queryable, Debug, Selectable, PartialEq, Serialize, Deserialize, Clone)]
+#[diesel(table_name = users)]
+pub struct UserDTOMin {
+    pub name: String,
+    pub email: String,
+    pub created_at: Option<DateTime<Utc>>, 
+    pub updated_at: Option<DateTime<Utc>>,
+    pub deleted_at: Option<DateTime<Utc>>
+}
