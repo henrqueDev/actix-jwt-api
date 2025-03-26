@@ -1,10 +1,10 @@
-use actix_web::{http::header::ContentType, middleware::from_fn, web::{self, ServiceConfig}, HttpRequest, HttpResponse, Responder};
+use actix_web::{ http::header::ContentType, middleware::from_fn, web::{self, ServiceConfig}, HttpRequest, HttpResponse, Responder};
 use base32::{encode, Alphabet};
 use chrono::Utc;
 use diesel::{ ExpressionMethods, QueryDsl, SelectableHelper, TextExpressionMethods };
 use diesel_async::RunQueryDsl;
 use totp_rs::{Algorithm, Secret, TOTP};
-use crate::{database::db::get_connection, http::{middleware::auth_middleware::auth_middleware, requests::user::{user_activate2fa_request::UserActivate2FARequest, user_filter_request::UserFilterRequest, user_store_request::UserStoreRequest, user_update_request::UserUpdateRequest}, responses::{auth::auth_login_response::AuthLoginError, user::{user_delete_response::{UserDeleteError, UserDeleteResponse}, user_enable2fa_response::UserEnable2FAResponse, user_index_response::UserIndexResponse, user_store_response::{UserStoreError, UserStoreResponse}}}, GenericError, GenericResponse}, model::user::{user::User, user_dto::{UserDTO, UserDTOMin}}, schema::users::{self}, services::auth::decode_jwt};
+use crate::{database::db::get_connection, http::{middleware::auth_middleware::auth_middleware, requests::user::{user_activate2fa_request::UserActivate2FARequest, user_filter_request::UserFilterRequest, user_store_request::UserStoreRequest, user_update_request::UserUpdateRequest}, responses::{auth::auth_login_response::AuthLoginError, user::{user_delete_response::{UserDeleteError, UserDeleteResponse}, user_enable2fa_response::UserEnable2FAResponse, user_index_response::UserIndexResponse, user_store_response::{UserStoreError, UserStoreResponse}, user_update_response::{UserUpdateError, UserUpdateResponse}}}, GenericError, GenericResponse}, model::user::{user::User, user_dto::{UserDTO, UserDTOMin}}, schema::users::{self}, services::auth::decode_jwt};
 use crate::schema::users::dsl::*;
 use base64::{prelude::BASE64_STANDARD_NO_PAD, Engine};
 use rand::Rng;
@@ -16,6 +16,7 @@ pub async fn index(query_params: web::Query<UserFilterRequest>) -> impl Responde
 
     let mut query = users.into_boxed();
 
+    // Aplicando filtros na consulta
     if let Some(id_query) = query_params.0.id {
         query = query.filter(users::id.eq(id_query));
     }
@@ -28,6 +29,7 @@ pub async fn index(query_params: web::Query<UserFilterRequest>) -> impl Responde
         query = query.filter(users::email.like(format!("%{}%", email_query)));
     }
 
+    // Filtro de paginação
     if let Some(page_query) = query_params.0.page {
         
         let per_page = match query_params.0.per_page {
@@ -39,30 +41,37 @@ pub async fn index(query_params: web::Query<UserFilterRequest>) -> impl Responde
         query = query.limit(per_page as i64).offset(offset_num);
     }
 
+    // Consulta na tabela de users, retornando a struct UserDTOMin
     let results = query
         .select(UserDTOMin::as_select())
         .get_results::<UserDTOMin>(conn)
         .await;
 
+    // Verificar se a consulta foi um sucesso (revisar tipagem do retorno de erro)
     match results {
         Ok(query_users) => {
+
+            // Preparando dados para retornar para o client
             let users_response = UserIndexResponse {
                 message: "Query users gone successfully!",
                 users: query_users,
-                page: query_params.0.page,
+                current_page: query_params.0.page,
                 per_page: query_params.0.per_page
             };
 
+            // Resposta status 200
             HttpResponse::Ok().content_type(ContentType::json()).json(users_response)
         },
-        Err(err) => {
-            let error_msg = err.to_string();
+        Err(_err) => {
 
+
+            // Erro interno no servidor durante consulta no banco
             let error_response = GenericError {
                 message: "Error querying users on DB!",
-                error: &error_msg
+                error: "Internal Server error while "
             };
 
+            // Resposta com status 500
             HttpResponse::InternalServerError()
             .content_type(ContentType::json())
             .json(error_response)
