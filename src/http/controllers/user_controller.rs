@@ -230,8 +230,8 @@ pub async fn delete_my_account(req: HttpRequest) -> impl Responder{
                         } else {
 
                             let error_json = UserDeleteError {
-                                message: "No user was deleted because this user does not exist!", 
-                                error: "Your user does not exist in our database!"
+                                message: "User was not deleted!", 
+                                error: "Your user may not exists in our database or server was not able to query righlty!"
                             };
         
                             return HttpResponse::NotFound()
