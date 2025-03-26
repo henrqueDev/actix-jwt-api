@@ -353,54 +353,79 @@ pub async fn enable_2fa(req: HttpRequest) -> impl Responder {
             match user {
                 Ok(user)=> {
 
-            let mut rng = rand::rng();
-            let mut random_bytes = [0u8; 32];
-            rng.fill(&mut random_bytes);
-
-            let app_name = dotenv!("APP_NAME");
+                    let mut rng = rand::rng();
+                    let mut random_bytes = [0u8; 32];
+                    rng.fill(&mut random_bytes);
         
-            let random_code = BASE64_STANDARD_NO_PAD.encode(&random_bytes);
-            let base_32_code = encode(Alphabet::Rfc4648 { padding: true }, random_code.as_bytes());
+                    let app_name = dotenv!("APP_NAME");
+                
+                    let random_code = BASE64_STANDARD_NO_PAD.encode(&random_bytes);
+                    let base_32_code = encode(Alphabet::Rfc4648 { padding: true }, random_code.as_bytes());
+        
+                    let totp = TOTP::new(
+                        Algorithm::SHA512,
+                        6,
+                        1,
+                        30,
+                        Secret::Encoded(base_32_code).to_bytes().unwrap(),
+                        Some(app_name.to_string()),
+                        user.email.clone()
+                    ).unwrap();
+        
+                    let qrcode_base64 = totp.get_qr_base64().unwrap();
+                    let setup_key = totp.get_secret_base32();
+                    let date_now = Utc::now();
+        
+                    let new_updated_user = UserDTO {
+                        name: user.name,
+                        email: user.email,
+                        password: user.password,
+                        two_factor_secret: Some(setup_key.clone()),
+                        two_factor_recovery_code: user.two_factor_recovery_code,
+                        two_factor_confirmed_at: user.two_factor_confirmed_at,
+                        created_at: user.created_at,
+                        updated_at: Some(date_now),
+                        deleted_at: user.deleted_at
+                    };
+        
+                    let user_updated_query = diesel::update(users::table.filter(users::id.eq(user.id)))
+                        .set(new_updated_user)
+                        .execute(conn)
+                        .await;
 
-            let totp = TOTP::new(
-                Algorithm::SHA512,
-                6,
-                1,
-                30,
-                Secret::Encoded(base_32_code).to_bytes().unwrap(),
-                Some(app_name.to_string()),
-                user.email.clone()
-            ).unwrap();
-
-            let qrcode_base64 = totp.get_qr_base64().unwrap();
-            let setup_key = totp.get_secret_base32();
-            let date_now = Utc::now();
-
-            let new_updated_user = UserDTO {
-                name: user.name,
-                email: user.email,
-                password: user.password,
-                two_factor_secret: Some(setup_key.clone()),
-                two_factor_recovery_code: user.two_factor_recovery_code,
-                two_factor_confirmed_at: user.two_factor_confirmed_at,
-                created_at: user.created_at,
-                updated_at: Some(date_now),
-                deleted_at: user.deleted_at
-            };
-
-            diesel::update(users::table.filter(users::id.eq(user.id)))
-                .set(new_updated_user)
-                .execute(conn)
-                .await
-                .expect("Error setting 2FA code for user!");
-            
-            let response = UserEnable2FAResponse {
-                message: "QR Code and Config Key generated! Confirm code at /user/activate-2fa",
-                qrcode: &qrcode_base64,
-                config_code: &setup_key
-            }; 
-
-                    return HttpResponse::Ok().content_type(ContentType::json()).json(response);
+                    match user_updated_query {
+                        Ok(rows) => {
+                            if rows > 0 {
+                                let response = UserEnable2FAResponse {
+                                    message: "QR Code and Config Key generated! Confirm code at /user/activate-2fa",
+                                    qrcode: &qrcode_base64,
+                                    config_code: &setup_key
+                                }; 
+                                
+                                return HttpResponse::Ok().content_type(ContentType::json()).json(response);
+                            } else {
+                                let res_err = UserUpdateError {
+                                    message: "Error trying setting 2FA code for user!",
+                                    error: "Query gone fine but 2FA code was not set for user."
+                                };
+                    
+                                return HttpResponse::NotFound()
+                                    .content_type(ContentType::json())
+                                    .json(res_err);
+                            }
+                        },
+                        Err(_err) => {
+                            let res_err = UserUpdateError {
+                                message: "Error trying setting 2FA code for user!",
+                                error: "Internal Server error while trying set 2FA code for user."
+                            };
+                
+                            return HttpResponse::Ok()
+                                .content_type(ContentType::json())
+                                .json(res_err);
+                        }
+                    }
+                    
                 },
                 Err(_error)=>{
                     let res_err = UserUpdateError {
