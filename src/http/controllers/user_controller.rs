@@ -313,9 +313,10 @@ pub async fn delete_my_account(req: HttpRequest) -> impl Responder{
                 };
             },
             Err(_error) => {
-                let error = String::from("Cannot decode JWT: your auth value may not be a Json Web Token.");
 
-                let error_json = AuthLoginError {message: &error};
+                let error_json = AuthLoginError {
+                    message: "Cannot decode JWT: your auth value may not be a valid Json Web Token."
+                };
 
                 return HttpResponse::BadRequest()
                     .content_type(ContentType::json())
