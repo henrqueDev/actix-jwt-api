@@ -63,7 +63,7 @@ pub async fn index(query_params: web::Query<UserFilterRequest>) -> impl Responde
             HttpResponse::Ok().content_type(ContentType::json()).json(users_response)
         },
         Err(_err) => {
-
+            
 
             // Erro interno no servidor durante consulta no banco
             let error_response = GenericError {
@@ -133,7 +133,7 @@ pub async fn store(body: web::Json<UserStoreRequest>) -> impl Responder {
                 message: "Error while trying store User!",
                 error: &error_msg
             };
-
+            
             // Retornar dados com status 500
             return HttpResponse::InternalServerError()
                 .content_type(ContentType::json())
@@ -467,74 +467,123 @@ pub async fn activate_2fa(req: HttpRequest, body: web::Json<UserActivate2FAReque
                 .filter(users::email.eq(claim.sub))
                 .select(User::as_select())
                 .get_result::<User>(conn)
-                .await
-                .expect("User does not exists!");
+                .await;
+            
+            match user {
+                Ok(user_found) => {
+                    
+                    match user_found.two_factor_secret {
+                        Some(secret) => {
+                            let date_now = Utc::now();
+                            let app_name = dotenv!("APP_NAME");
 
-            match user.two_factor_secret {
-                    Some(secret) => {
-                        let date_now = Utc::now();
-                        let app_name = dotenv!("APP_NAME");
+                            let totp = TOTP::new(
+                                Algorithm::SHA512,
+                                6,
+                                1,
+                                30,
+                                Secret::Encoded(secret.clone()).to_bytes().unwrap(),
+                                Some(app_name.to_string()),
+                                user_found.email.clone()
+                            ).unwrap();
 
-                        let totp = TOTP::new(
-                            Algorithm::SHA512,
-                            6,
-                            1,
-                            30,
-                            Secret::Encoded(secret.clone()).to_bytes().unwrap(),
-                            Some(app_name.to_string()),
-                            user.email.clone()
-                        ).unwrap();
+                            let seconds_now = ((Utc::now().timestamp_millis()) / 1000) as u64;
 
-                        let seconds_now = ((Utc::now().timestamp_millis()) / 1000) as u64;
+                            if totp.check(body.code.as_str(), seconds_now) == true {
+                                let new_updated_user = UserDTO {
+                                    name: user_found.name,
+                                    email: user_found.email,
+                                    password: user_found.password,
+                                    two_factor_secret:  Some(secret),
+                                    two_factor_recovery_code: user_found.two_factor_recovery_code,
+                                    two_factor_confirmed_at: Some(date_now),
+                                    created_at: user_found.created_at,
+                                    updated_at: Some(date_now),
+                                    deleted_at: user_found.deleted_at
+                                };
 
-                        if totp.check(body.code.as_str(), seconds_now) == true {
-                            let new_updated_user = UserDTO {
-                                name: user.name,
-                                email: user.email,
-                                password: user.password,
-                                two_factor_secret:  Some(secret),
-                                two_factor_recovery_code: user.two_factor_recovery_code,
-                                two_factor_confirmed_at: Some(date_now),
-                                created_at: user.created_at,
-                                updated_at: Some(date_now),
-                                deleted_at: user.deleted_at
-                            };
-                
-                            diesel::update(users::table.filter(users::id.eq(user.id)))
-                                .set(new_updated_user)
-                                .execute(conn)
-                                .await
-                                .expect("Error setting 2FA code for user!");
+                                let user_updated_2fa_on = diesel::update(users::table.filter(users::id.eq(user_found.id)))
+                                    .set(new_updated_user)
+                                    .execute(conn)
+                                    .await;
+
+                                match user_updated_2fa_on {
+                                    Ok(rows) => {
+                                        if rows > 0 {
+
+                                            let response = GenericResponse {
+                                                message: "2FA setted up successfully!"
+                                            }; 
+                                            
+                                            return HttpResponse::Ok().content_type(ContentType::json()).json(response);
+                                
+                                        } else {
+                                            let response = GenericError {
+                                                message: "Error setting up 2FA!",
+                                                error: "Query gone fine but 2FA Challenge was not confirmed on our side"
+                                            }; 
+                                
+                                            return HttpResponse::NotFound().content_type(ContentType::json()).json(response);   
+
+                                        }
+
+                                    },
+                                    Err(_) => {
+                                        let response = GenericError {
+                                            message: "Error setting up 2FA!",
+                                            error: "Internal Server error querying to DB"
+                                        }; 
                             
-                            let response = GenericResponse {
-                                message: "2FA setted up successfully!"
-                            }; 
-                
-                            HttpResponse::Ok().content_type(ContentType::json()).json(response)
-                        } else {
-                            HttpResponse::Unauthorized()
+                                        return HttpResponse::InternalServerError().content_type(ContentType::json()).json(response);
+                                    }
+                                }
+                            } else {
+                                let response = GenericError {
+                                    message: "Error setting up 2FA!",
+                                    error: "Internal Server error querying to DB"
+                                }; 
+
+                                return HttpResponse::Unauthorized()
+                                    .content_type(ContentType::json())
+                                    .json(response);
+                            }
+
+                        },
+                        None => {
+
+                            let res_2fa_not_requested = GenericError {
+                                message: "Error trying confirm 2FA code for user!",
+                                error: "User did not request 2FA challenge!"
+                            };
+
+                            return HttpResponse::Unauthorized()
                                 .content_type(ContentType::json())
-                                .json("User failed the 2FA challenge code!".to_string())
+                                .json(res_2fa_not_requested);
                         }
+                }
+            },
+                Err(_err) => {
+                    let res_2fa_not_requested = GenericError {
+                        message: "No user Logged!",
+                        error: "Your token claims is not valid."
+                    };
 
-                    },
-                    None => {
-                        HttpResponse::Unauthorized()
-                            .content_type(ContentType::json())
-                            .json("User did not request 2FA challenge!".to_string())
-                    }
-            }
+                    return HttpResponse::Unauthorized()
+                        .content_type(ContentType::json())
+                        .json(res_2fa_not_requested);
+                }
+        }
 
-        },
-        Err(_err) => {
+    },
+    Err(_err) => {
             let error_response = GenericError {
                 message: "No user Logged!",
                 error: "Invalid Authorization token."
             };
 
-            HttpResponse::Unauthorized()
+            return HttpResponse::Unauthorized()
                 .content_type(ContentType::json())
-                .json(error_response)
+                .json(error_response);
         }
     }
 }
