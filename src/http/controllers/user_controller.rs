@@ -181,7 +181,7 @@ pub async fn update(path: web::Path<i32>, body: web::Json<UserUpdateRequest>) ->
     
                                 let new_password = match bcrypt::hash(body.new_password.clone().unwrap(), 10){
                                     Ok(password_data) => password_data,
-                                    Err(_err) => panic!("Error while encrypt password")
+                                    Err(_err) => panic!("Error while encrypt new password") // Revisar
                                 };
     
                                 new_updated_user.password = new_password;
