@@ -146,7 +146,7 @@ pub async fn update(path: web::Path<i32>, body: web::Json<UserUpdateRequest>) ->
 
     let conn = &mut get_connection().await.unwrap();
 
-    // Consulta o usuario no banco pelo ID passado no path do endpoint
+    // Consulta o usuario no banco pelo ID passado no path da requisição
     let find_user  = users::table
         .filter(users::id.eq(path.into_inner()))
         .select(User::as_select())
@@ -156,6 +156,7 @@ pub async fn update(path: web::Path<i32>, body: web::Json<UserUpdateRequest>) ->
     match find_user {
         Ok(user_found) => {
 
+            // Preparar uma struct mutavel para atualizar os campos necessários 
             let mut new_updated_user = UserDTO {
                 name: user_found.name,
                 email: user_found.email,
@@ -168,8 +169,11 @@ pub async fn update(path: web::Path<i32>, body: web::Json<UserUpdateRequest>) ->
                 deleted_at: user_found.deleted_at
             };
             
+            // Verificar se o usuario quer atualizar a senha atual
             match &body.old_password {
                 Some(old_password) => {
+
+                    // Verificar se a senha corresponde com a que está no banco
                     match bcrypt::verify(old_password, &user_found.password) {
                         Ok(result) => {
     
@@ -188,21 +192,23 @@ pub async fn update(path: web::Path<i32>, body: web::Json<UserUpdateRequest>) ->
                                     .json("Password confirmation gone wrong!");
                             }
                         },
+                        
+                        //Em caso de erro interno no processo de validação da senha antiga
                         Err(err) => {
-                            let err_msg = err.to_string();
 
                             let res_bcrypt_err = UserUpdateError {
                                 message: "Server wasnt able to parse old Password to confirm!",
-                                error: &err_msg
+                                error: &err.to_string()
                             };
 
-                            return HttpResponse::BadRequest()
+                            // Retornar resposta com status 500
+                            return HttpResponse::InternalServerError()
                                 .content_type(ContentType::json())
                                 .json(res_bcrypt_err);
                         }
                     };
                 },
-                None => {},
+                None => {}, // Se não tiver o campo old_password, não faz nada
             }
 
             // Verificar se o campo de nome foi passado na requisição
@@ -211,6 +217,7 @@ pub async fn update(path: web::Path<i32>, body: web::Json<UserUpdateRequest>) ->
                 None => {},
             }
 
+            // Verificar se o campo de email foi passado na requisição
             match &body.email {
                 Some(new_email) => {new_updated_user.email = new_email.to_owned()},
                 None => {},
@@ -224,21 +231,30 @@ pub async fn update(path: web::Path<i32>, body: web::Json<UserUpdateRequest>) ->
                 users::table.filter(users::id.eq(user_found.id))
             ).set(new_updated_user).get_result::<User>(conn).await;
 
+            // Verificar resultado da query (sucesso ou erro interno)
             match updated_user {
+
+                // Usuario atualizado
                 Ok(user) => {
+
+                    // Resposta de sucesso
                     let res_updated_success = UserUpdateResponse {
                         message: "User updated successfully!",
                         user
                     };
                     
+                    // Responder com status 200
                     HttpResponse::Ok()
                         .content_type(ContentType::json())
                         .json(res_updated_success)
                 },
+                
+                // Erro interno ao executar a query
                 Err(_error) => {
+
                     let res_err = UserUpdateError {
                         message: "Error trying update user!",
-                        error: "Internal Server error"
+                        error: "Internal Server error on update user query."
                     };
 
                     HttpResponse::InternalServerError()
@@ -276,7 +292,10 @@ pub async fn delete_my_account(req: HttpRequest) -> impl Responder{
                 ).execute(conn).await;
 
                 match user_delete {
+                    // Query rodou com sucesso
                     Ok(rows) => {
+
+                        // Checar se alguma instancia no banco de dados foi afetada (revisar)
                         if rows > 0 {
                             let response = UserDeleteResponse{
                                 message: "Your user was deleted successfully!",
