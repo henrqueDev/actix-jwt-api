@@ -363,6 +363,8 @@ pub async fn delete_my_account(req: HttpRequest) -> impl Responder{
 }
 
 pub async fn enable_2fa(req: HttpRequest) -> impl Responder {
+
+    // Pegar valor do token passado no header
     let token = req.headers().get("Authorization").unwrap();
 
     match decode_jwt(token.to_str().expect("Error casting headervalue to &str")) {
@@ -379,15 +381,19 @@ pub async fn enable_2fa(req: HttpRequest) -> impl Responder {
             match user {
                 Ok(user)=> {
 
+                    // Gerar array de com 32 bytes aleatórios
                     let mut rng = rand::rng();
                     let mut random_bytes = [0u8; 32];
                     rng.fill(&mut random_bytes);
         
+                    // Pegar nome da API no .env
                     let app_name = dotenv!("APP_NAME");
                 
+                    // Gerar codigo base64 com os bytes aleatórios e codificar para base 32 (revisar)
                     let random_code = BASE64_STANDARD_NO_PAD.encode(&random_bytes);
                     let base_32_code = encode(Alphabet::Rfc4648 { padding: true }, random_code.as_bytes());
         
+                    // Gerar uma instância de One Timed Password
                     let totp = TOTP::new(
                         Algorithm::SHA512,
                         6,
@@ -398,10 +404,17 @@ pub async fn enable_2fa(req: HttpRequest) -> impl Responder {
                         user.email.clone()
                     ).unwrap();
         
+                    // Pegar o código de QRCode e a chave de configuração da instância
                     let qrcode_base64 = totp.get_qr_base64().unwrap();
                     let setup_key = totp.get_secret_base32();
+
+                    // Pegar a hora do tempo universal coodernado
                     let date_now = Utc::now();
         
+                    /* 
+                        * Atualizar usuario no banco com a chave de configuração para ser 
+                        * confirmado no endpoint de ativação do 2FA 
+                    */
                     let new_updated_user = UserDTO {
                         name: user.name,
                         email: user.email,
@@ -414,11 +427,13 @@ pub async fn enable_2fa(req: HttpRequest) -> impl Responder {
                         deleted_at: user.deleted_at
                     };
         
+                    // Atualizar usuario no banco com a chave de configuração do 2FA
                     let user_updated_query = diesel::update(users::table.filter(users::id.eq(user.id)))
                         .set(new_updated_user)
                         .execute(conn)
                         .await;
 
+                    // Verificar resultado da query
                     match user_updated_query {
                         Ok(rows) => {
                             if rows > 0 {
@@ -440,6 +455,8 @@ pub async fn enable_2fa(req: HttpRequest) -> impl Responder {
                                     .json(res_err);
                             }
                         },
+
+                        // Em caso de erro interno ao executar a Query
                         Err(_err) => {
                             let res_err = UserUpdateError {
                                 message: "Error trying setting 2FA code for user!",
@@ -454,9 +471,12 @@ pub async fn enable_2fa(req: HttpRequest) -> impl Responder {
                     
                 },
                 Err(_error)=>{
+                    
+                    
+
                     let res_err = UserUpdateError {
                         message: "Error trying setting 2FA code for user!",
-                        error: "User not found"
+                        error: "User not found."
                     };
         
                     return HttpResponse::BadRequest()
