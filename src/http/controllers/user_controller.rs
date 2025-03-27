@@ -16,7 +16,7 @@ pub async fn index(query_params: web::Query<UserFilterRequest>) -> impl Responde
 
     let mut query = users.into_boxed();
 
-    // Aplicando filtros na consulta
+    // Aplicando filtros na consulta (Revisar o framework)
     if let Some(id_query) = query_params.0.id {
         query = query.filter(users::id.eq(id_query));
     }
