@@ -6,6 +6,7 @@ use totp_rs::{Algorithm, Secret, TOTP};
 use dotenvy_macro::dotenv;
 use crate::{database::db::get_connection, http::{requests::auth::auth_login_request::AuthLoginRequest, responses::auth::auth_login_response::{AuthLoginError, AuthLoginResponse}, GenericError, GenericResponse}, model::user::user::User, schema::users, services::auth::{decode_jwt, encode_jwt}};
 
+/// Endpoint para o usuário efetuar o Login
 pub async fn login(body: web::Json<AuthLoginRequest>) -> impl Responder {
     
     let conn = &mut get_connection().await.unwrap();
@@ -151,6 +152,7 @@ pub async fn login(body: web::Json<AuthLoginRequest>) -> impl Responder {
     
 }
 
+/// Endpoint que valida e retorna credenciais carregadas no token JWT passado no header da requisição
 pub async fn validate_token(req: HttpRequest) -> impl Responder {
     let token = req.headers().get("Authorization").unwrap();
     match decode_jwt(token.to_str().expect("Error casting headervalue to &str")) {
