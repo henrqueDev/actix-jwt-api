@@ -18,6 +18,7 @@ pub struct GenericError<'a> {
     pub error: &'a str
 }
 
+// Retornando string na resposta ao invés de JSON (Revisar)
 impl Display for GenericError<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{{ \"message\":{:#?}, \"error\":{:#?} }}", self.message, self.error)
