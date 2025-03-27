@@ -660,6 +660,7 @@ pub async fn activate_2fa(req: HttpRequest, body: web::Json<UserActivate2FAReque
     }
 }
 
+// Endpoints do controller
 pub fn config(cfg: &mut ServiceConfig) {
     cfg.service(
 web::scope("/users")

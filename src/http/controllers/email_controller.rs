@@ -74,6 +74,7 @@ pub async fn send(body: MultipartForm<EmailSendRequestFormData>) -> impl Respond
 
 }
 
+// Endpoints do controller
 pub fn config(cfg: &mut ServiceConfig) {
     cfg.service(
 web::scope("/email")
