@@ -305,32 +305,39 @@ pub async fn delete_my_account(req: HttpRequest) -> impl Responder{
                             return HttpResponse::Ok()
                                 .content_type(ContentType::json())
                                 .json(response);
-                        } else {
+                        } 
+                        /* 
+                            * Caso a query tenha sido executada corretamente e 
+                            * nenhum usuario foi afetado com a atualização
+                        */ else {
 
                             let error_json = UserDeleteError {
                                 message: "User was not deleted!", 
                                 error: "Query gone fine but user may not exists in our database."
                             };
         
+                            // Retornar com status 404
                             return HttpResponse::NotFound()
                                 .content_type(ContentType::json())
                                 .json(error_json);
                         }
                     },
                     Err(error) => {
-                        let error_msg = error.to_string();
-
+                        // Resposta com o erro que aconteceu no lado do servidor
                         let error_json = UserDeleteError {
                             message: "Some error raised deleting user", 
-                            error: &error_msg
+                            error: &error.to_string()
                         };
         
+                        // Retornar resposta com status 500
                         return HttpResponse::InternalServerError()
                             .content_type(ContentType::json())
                             .json(error_json);
                     }
                 };
             },
+            
+            // Em caso de erro, geralmente o token JWT não é valido.
             Err(_error) => {
 
                 let error_json = AuthLoginError {
