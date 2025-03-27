@@ -10,6 +10,7 @@ use base64::{prelude::BASE64_STANDARD_NO_PAD, Engine};
 use rand::Rng;
 use dotenvy_macro::dotenv;
 
+/// Endpoint para consulta de usuários com filtros opcionais
 pub async fn index(query_params: web::Query<UserFilterRequest>) -> impl Responder {
 
     let conn = &mut get_connection().await.unwrap();
@@ -79,6 +80,7 @@ pub async fn index(query_params: web::Query<UserFilterRequest>) -> impl Responde
     }
 }
 
+/// Endpoint para cadastro de novos usuários
 pub async fn store(body: web::Json<UserStoreRequest>) -> impl Responder {
     let mut data = body.into_inner();
     
@@ -142,6 +144,9 @@ pub async fn store(body: web::Json<UserStoreRequest>) -> impl Responder {
     }
 }
 
+/// Endpoint para atualização de usuários
+/// 
+/// Revisar: Usuários podem modificar outro usuário, implementar middleware de permissões.
 pub async fn update(path: web::Path<i32>, body: web::Json<UserUpdateRequest>) -> impl Responder {
 
     let conn = &mut get_connection().await.unwrap();
@@ -279,6 +284,7 @@ pub async fn update(path: web::Path<i32>, body: web::Json<UserUpdateRequest>) ->
     
 }
 
+/// Endpoint para usuários deletarem a conta (exclusão lógica)
 pub async fn delete_my_account(req: HttpRequest) -> impl Responder{
     if let Some(token) = req.headers().get("Authorization") {
 
@@ -363,6 +369,7 @@ pub async fn delete_my_account(req: HttpRequest) -> impl Responder{
     }
 }
 
+/// Endpoint para solicitar ativação da Autenticação de dois fatores
 pub async fn enable_2fa(req: HttpRequest) -> impl Responder {
 
     // Pegar valor do token passado no header
@@ -499,6 +506,11 @@ pub async fn enable_2fa(req: HttpRequest) -> impl Responder {
 
 } 
 
+/// Endpoint para o usuário ativar a Autenticação de dois fatores com o
+/// código aleatório do aplicativo de autenticação que o usuário utiliza.
+/// 
+/// Para que a instância do One Timed Password valide o código passado na requisição,
+/// é necessário que o dispositivo do usuário esteja sincronizado com o Horário Universal Coordenado
 pub async fn activate_2fa(req: HttpRequest, body: web::Json<UserActivate2FARequest>) -> impl Responder {
     
     // Pegar token do header na requisição
