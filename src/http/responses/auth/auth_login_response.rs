@@ -8,5 +8,6 @@ pub struct AuthLoginResponse<'a> {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AuthLoginError<'a> {
-    pub message: &'a str
+    pub message: &'a str,
+    pub error: &'a str
 }
