@@ -4,7 +4,7 @@
 </p>
 
 ## Descrição
-Esse é um projeto simples de API com autenticação sem estado via Json Web Token (JWT). Desenvolvido em Rust, usando o framework Actix e o ORM Diesel.
+Esse é um projeto simples de API com autenticação sem estado via Json Web Token (JWT) com 2FA opcional. Desenvolvido em Rust, usando o framework Actix e o ORM Diesel.
 # Como rodar o projeto
 ## Pré-requisitos
 - Rustc v1.83
@@ -18,6 +18,7 @@ Esse é um projeto simples de API com autenticação sem estado via Json Web Tok
 - Docker
 - PgAdmin 4 (Opcional)
 - Postman
+- Dispositivos com horários sincronizados com o Tempo Universal Coordenado (UTC) (com ou sem fuso horário definido)
 
 ## Rodando o Projeto
 - Clone o repositório usando git clone:
