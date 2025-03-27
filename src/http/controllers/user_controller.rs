@@ -34,7 +34,7 @@ pub async fn index(query_params: web::Query<UserFilterRequest>) -> impl Responde
         
         let per_page = match query_params.0.per_page {
             Some(per_page) => per_page,
-            None => 5,
+            None => 5, // per_page padrão é 5
         };
         
         let offset_num = ((page_query - 1) * per_page) as i64;
