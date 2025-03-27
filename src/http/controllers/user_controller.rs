@@ -635,7 +635,7 @@ pub async fn activate_2fa(req: HttpRequest, body: web::Json<UserActivate2FAReque
                 // Caso as credenciais carregadas no token forem inválidas
                     let res_2fa_not_requested = GenericError {
                         message: "No user Logged!",
-                        error: "Your token claims is not valid."
+                    error: "Your token claims are not valid."
                     };
 
                     return HttpResponse::Unauthorized()
