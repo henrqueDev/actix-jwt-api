@@ -6,6 +6,7 @@ use dotenvy_macro::dotenv;
 use lettre::message::header;
 use lettre::message::header::ContentType as EmailContentType;
 
+/// Endpoint para envio de Email
 pub async fn send(body: MultipartForm<EmailSendRequestFormData>) -> impl Responder {
 
     // Pegar referencia do formulario passado na requisição
