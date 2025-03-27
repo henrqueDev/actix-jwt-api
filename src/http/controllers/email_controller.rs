@@ -8,38 +8,51 @@ use lettre::message::header::ContentType as EmailContentType;
 
 pub async fn send(body: MultipartForm<EmailSendRequestFormData>) -> impl Responder {
 
+    // Pegar referencia do formulario passado na requisição
     let data = &body;
+    
+    // Criar um singlePart do texto do email
     let text_body = SinglePart::builder().header(header::ContentType::TEXT_PLAIN).body(data.content.clone());
+    
+    // Iniciar a construção do Multipart
     let mut multipart_body = MultiPart::mixed().singlepart(text_body);
 
+    // Ler todos os arquivos passados no formulário e acrescentar no Multipart como anexo
     for file in &data.files {
         let filename = file.file_name.clone().unwrap_or_else(|| "anexo".to_owned());
         let file_bytes = file.data.to_vec();
 
+        // Conteúdo octet-stream são dados binários arbitrários
         let content_type = EmailContentType::parse("application/octet-stream").unwrap();
         let attachment = Attachment::new(filename.to_owned())
             .body(file_bytes.to_owned(), content_type);
         
+        // Adicionar no construtor do Multipart
         multipart_body = multipart_body.singlepart(attachment);
     }
 
+    // Ler dados do usuário da aplicação (.env) e de quem vai receber o email
     let user_email = dotenv!("EMAIL");
     let user_receiver = &data.to;
     let password = dotenv!("GOOGLE_TOKEN");
     
+    // Criar o Email
     let email = Message::builder()
         .from(user_email.parse().unwrap())
         .to(user_receiver.parse().unwrap())
         .subject(data.title.clone())
         .multipart(multipart_body).unwrap();
 
+    // Resgatar as credenciais para conexão segura
     let creds = Credentials::new(user_email.to_owned(), password.to_owned());
 
+    // Construtor do algoritmo de transporte pelo serviço do Gmail
     let mailer = SmtpTransport::starttls_relay("smtp.gmail.com").expect("Error creating StartTLS Transport")
         .authentication(vec![Mechanism::Plain])
         .credentials(creds)
         .build();
 
+    // Enviar email e verificar se o envio deu certo
     match mailer.send(&email) {
         Ok(_) => HttpResponse::Ok()
             .content_type(ContentType::json())
