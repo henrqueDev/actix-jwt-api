@@ -244,9 +244,9 @@ pub async fn update(path: web::Path<i32>, body: web::Json<UserUpdateRequest>) ->
                     };
                     
                     // Responder com status 200
-                    HttpResponse::Ok()
+                    return HttpResponse::Ok()
                         .content_type(ContentType::json())
-                        .json(res_updated_success)
+                        .json(res_updated_success);
                 },
                 
                 // Erro interno ao executar a query
@@ -257,9 +257,9 @@ pub async fn update(path: web::Path<i32>, body: web::Json<UserUpdateRequest>) ->
                         error: "Internal Server error on update user query."
                     };
 
-                    HttpResponse::InternalServerError()
+                    return HttpResponse::InternalServerError()
                     .content_type(ContentType::json())
-                    .json(res_err)
+                    .json(res_err);
                 }
             }
 
@@ -267,12 +267,12 @@ pub async fn update(path: web::Path<i32>, body: web::Json<UserUpdateRequest>) ->
         Err(_err) => {
             let res_err = UserUpdateError {
                 message: "Error trying update user!",
-                error: "User not found"
+                error: "Internal server error raised while looking for user in Database"
             };
 
-            HttpResponse::BadRequest()
+            return HttpResponse::InternalServerError()
                 .content_type(ContentType::json())
-                .json(res_err)
+                .json(res_err);
         }
     }
 
@@ -472,8 +472,6 @@ pub async fn enable_2fa(req: HttpRequest) -> impl Responder {
                     
                 },
                 Err(_error)=>{
-                    
-                    
 
                     let res_err = UserUpdateError {
                         message: "Error trying setting 2FA code for user!",
