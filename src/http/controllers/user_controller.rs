@@ -501,6 +501,8 @@ pub async fn enable_2fa(req: HttpRequest) -> impl Responder {
 } 
 
 pub async fn activate_2fa(req: HttpRequest, body: web::Json<UserActivate2FARequest>) -> impl Responder {
+    
+    // Pegar token do header na requisição
     let token = req.headers().get("Authorization").unwrap();
 
     
@@ -509,6 +511,7 @@ pub async fn activate_2fa(req: HttpRequest, body: web::Json<UserActivate2FAReque
             
             let conn = &mut get_connection().await.unwrap();
 
+            // Consultar usuario no banco
             let user = users::table
                 .filter(users::email.eq(claim.sub))
                 .select(User::as_select())
@@ -518,11 +521,15 @@ pub async fn activate_2fa(req: HttpRequest, body: web::Json<UserActivate2FAReque
             match user {
                 Ok(user_found) => {
                     
+                    // Verificar se o usuario encontrado possui a chave de configuração do 2FA
                     match user_found.two_factor_secret {
                         Some(secret) => {
+                            
+                            // Pegar o horário universal coordenado e o nome do app (.env)
                             let date_now = Utc::now();
                             let app_name = dotenv!("APP_NAME");
 
+                            // Criar a instância do One Timed Password com as configurações do usuario
                             let totp = TOTP::new(
                                 Algorithm::SHA512,
                                 6,
@@ -533,9 +540,16 @@ pub async fn activate_2fa(req: HttpRequest, body: web::Json<UserActivate2FAReque
                                 user_found.email.clone()
                             ).unwrap();
 
+                            // Aproximar o valor da data/hora para o horario Unix (segundos desde 01/01/1970)
                             let seconds_now = ((Utc::now().timestamp_millis()) / 1000) as u64;
 
+                            /* 
+                                * Verificar se o código passado na requisição é valido baseado com 
+                                * a aproximação feita pro horário Unix
+                            */
                             if totp.check(body.code.as_str(), seconds_now) == true {
+                                
+                                // Preparar Struct com o 2FA confirmado (data/hora atual UTC)
                                 let new_updated_user = UserDTO {
                                     name: user_found.name,
                                     email: user_found.email,
@@ -548,15 +562,18 @@ pub async fn activate_2fa(req: HttpRequest, body: web::Json<UserActivate2FAReque
                                     deleted_at: user_found.deleted_at
                                 };
 
+                                // Query para atualizar usuario com o 2FA confirmado
                                 let user_updated_2fa_on = diesel::update(users::table.filter(users::id.eq(user_found.id)))
                                     .set(new_updated_user)
                                     .execute(conn)
                                     .await;
 
+                                // Verificar se a alteração foi realizada no banco
                                 match user_updated_2fa_on {
                                     Ok(rows) => {
                                         if rows > 0 {
 
+                                            // Sucesso, 2FA configurado para o usuario
                                             let response = GenericResponse {
                                                 message: "2FA setted up successfully!"
                                             }; 
@@ -564,6 +581,8 @@ pub async fn activate_2fa(req: HttpRequest, body: web::Json<UserActivate2FAReque
                                             return HttpResponse::Ok().content_type(ContentType::json()).json(response);
                                 
                                         } else {
+
+                                            // Caso a query tenha rodado mas o usuario não foi alterado no banco
                                             let response = GenericError {
                                                 message: "Error setting up 2FA!",
                                                 error: "Query gone fine but 2FA Challenge was not confirmed on our side"
@@ -597,6 +616,10 @@ pub async fn activate_2fa(req: HttpRequest, body: web::Json<UserActivate2FAReque
                         },
                         None => {
 
+                            /* 
+                                * Se o usuario não tem a chave configurada, 
+                                * foi porque ele não solicitou o 2FA para a sua conta ainda
+                            */
                             let res_2fa_not_requested = GenericError {
                                 message: "Error trying confirm 2FA code for user!",
                                 error: "User did not request 2FA challenge!"
@@ -607,8 +630,9 @@ pub async fn activate_2fa(req: HttpRequest, body: web::Json<UserActivate2FAReque
                                 .json(res_2fa_not_requested);
                         }
                 }
-            },
-                Err(_err) => {
+            }, Err(_err) => {
+
+                // Caso as credenciais carregadas no token forem inválidas
                     let res_2fa_not_requested = GenericError {
                         message: "No user Logged!",
                         error: "Your token claims is not valid."
@@ -619,9 +643,10 @@ pub async fn activate_2fa(req: HttpRequest, body: web::Json<UserActivate2FAReque
                         .json(res_2fa_not_requested);
                 }
         }
-
     },
     Err(_err) => {
+            
+            // Caso o token for inválido
             let error_response = GenericError {
                 message: "No user Logged!",
                 error: "Invalid Authorization token."
