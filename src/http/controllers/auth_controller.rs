@@ -3,7 +3,7 @@ use chrono::Utc;
 use diesel::{ExpressionMethods, QueryDsl, SelectableHelper};
 use diesel_async::RunQueryDsl;
 use totp_rs::{Algorithm, Secret, TOTP};
-use dotenv_codegen::dotenv;
+use dotenvy_macro::dotenv;
 use crate::{database::db::get_connection, http::{requests::auth::auth_login_request::AuthLoginRequest, responses::auth::auth_login_response::{AuthLoginError, AuthLoginResponse}, GenericError, GenericResponse}, model::user::user::User, schema::users, services::auth::{decode_jwt, encode_jwt}};
 
 pub async fn login(body: web::Json<AuthLoginRequest>) -> impl Responder {

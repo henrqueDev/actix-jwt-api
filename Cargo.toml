@@ -17,7 +17,7 @@ bcrypt = "0.17.0"
 jsonwebtoken = "9.3.0"
 time = "0.3"
 lazy_static = "1.5.0"
-dotenv_codegen = "0.15.0"
+dotenvy_macro = "0.15.7"
 lettre = "0.11.14"
 lettre_email = "0.9.4"
 totp-rs = {version = "5.6.0", features = ["qr"] }

@@ -1,7 +1,7 @@
 use diesel::prelude::*;
 use diesel_async::{AsyncConnection, AsyncPgConnection};
 
-use dotenv_codegen::dotenv;
+use dotenvy_macro::dotenv;
 
 pub async fn get_connection() -> Result<AsyncPgConnection, ConnectionError> {
     let url = dotenv!("DATABASE_URL");

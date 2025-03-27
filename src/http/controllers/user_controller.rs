@@ -8,7 +8,7 @@ use crate::{database::db::get_connection, http::{middleware::auth_middleware::au
 use crate::schema::users::dsl::*;
 use base64::{prelude::BASE64_STANDARD_NO_PAD, Engine};
 use rand::Rng;
-use dotenv_codegen::dotenv;
+use dotenvy_macro::dotenv;
 
 pub async fn index(query_params: web::Query<UserFilterRequest>) -> impl Responder {
 

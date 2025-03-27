@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, UNIX_EPOCH};
-use dotenv_codegen::dotenv;
+use dotenvy_macro::dotenv;
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Claims {
