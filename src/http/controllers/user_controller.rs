@@ -195,7 +195,7 @@ pub async fn update(path: web::Path<i32>, body: web::Json<UserUpdateRequest>) ->
                         
                         //Em caso de erro interno no processo de validação da senha antiga
                         Err(err) => {
-
+                            
                             let res_bcrypt_err = UserUpdateError {
                                 message: "Server wasnt able to parse old Password to confirm!",
                                 error: &err.to_string()
@@ -310,7 +310,7 @@ pub async fn delete_my_account(req: HttpRequest) -> impl Responder{
                             * Caso a query tenha sido executada corretamente e 
                             * nenhum usuario foi afetado com a atualização
                         */ else {
-
+                            
                             let error_json = UserDeleteError {
                                 message: "User was not deleted!", 
                                 error: "Query gone fine but user may not exists in our database."
@@ -572,7 +572,7 @@ pub async fn activate_2fa(req: HttpRequest, body: web::Json<UserActivate2FAReque
                                 match user_updated_2fa_on {
                                     Ok(rows) => {
                                         if rows > 0 {
-
+                                            
                                             // Sucesso, 2FA configurado para o usuario
                                             let response = GenericResponse {
                                                 message: "2FA setted up successfully!"
@@ -633,15 +633,15 @@ pub async fn activate_2fa(req: HttpRequest, body: web::Json<UserActivate2FAReque
             }, Err(_err) => {
 
                 // Caso as credenciais carregadas no token forem inválidas
-                    let res_2fa_not_requested = GenericError {
-                        message: "No user Logged!",
+                let res_2fa_not_requested = GenericError {
+                    message: "No user Logged!",
                     error: "Your token claims are not valid."
-                    };
+                };
 
-                    return HttpResponse::Unauthorized()
-                        .content_type(ContentType::json())
-                        .json(res_2fa_not_requested);
-                }
+                return HttpResponse::Unauthorized()
+                    .content_type(ContentType::json())
+                    .json(res_2fa_not_requested);
+            }
         }
     },
     Err(_err) => {
