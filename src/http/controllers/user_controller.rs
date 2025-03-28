@@ -616,7 +616,7 @@ pub async fn activate_2fa(req: HttpRequest, body: web::Json<UserActivate2FAReque
                             } else {
                                 let response = GenericError {
                                     message: "Error setting up 2FA!",
-                                    error: "Internal Server error querying to DB"
+                                    error: "Invalid code, user failed 2FA Challenge!"
                                 }; 
 
                                 return HttpResponse::Unauthorized()
