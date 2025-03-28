@@ -6,8 +6,8 @@ CREATE TABLE products (
     description TEXT,
     price MONEY NOT NULL,
     weight REAL NOT NULL,
-    dimension_height FLOAT,
-    dimension_width FLOAT, -- Dimensões em metros
-    dimension_depth FLOAT,
+    dimension_height DECIMAL(5,3),
+    dimension_width DECIMAL(5,3), -- Dimensões em metros
+    dimension_depth DECIMAL(5,3),
     category_id INTEGER NOT NULL REFERENCES product_categories(id)
 );
