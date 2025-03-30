@@ -2,7 +2,7 @@ use std::env;
 
 use actix_web::{get, App, HttpResponse, HttpServer, Responder};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
-use actix_jwt_api::{database::db::get_connection_sync, http::controllers::{auth_controller, user_controller, email_controller}};
+use actix_jwt_api::{database::db::get_connection_sync, http::controllers::{auth_controller, email_controller, product_controller, user_controller}};
 use dotenvy_macro::dotenv;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("./migrations");
@@ -31,7 +31,8 @@ async fn main() -> std::io::Result<()> {
             .service(check_running)
             .configure(user_controller::config)
             .configure(email_controller::config)
-            .configure(auth_controller::config);
+            .configure(auth_controller::config)
+            .configure(product_controller::config);
         
         return app;
     })

@@ -4,6 +4,7 @@ use chrono::Utc;
 use diesel::{ ExpressionMethods, QueryDsl, SelectableHelper, TextExpressionMethods };
 use diesel_async::RunQueryDsl;
 use totp_rs::{Algorithm, Secret, TOTP};
+use validator::Validate;
 use crate::{database::db::get_connection, http::{middleware::auth_middleware::auth_middleware, requests::user::{user_activate2fa_request::UserActivate2FARequest, user_filter_request::UserFilterRequest, user_store_request::UserStoreRequest, user_update_request::UserUpdateRequest}, responses::{auth::auth_login_response::AuthLoginError, user::{user_delete_response::{UserDeleteError, UserDeleteResponse}, user_enable2fa_response::UserEnable2FAResponse, user_index_response::UserIndexResponse, user_store_response::{UserStoreError, UserStoreResponse}, user_update_response::{UserUpdateError, UserUpdateResponse}}}, GenericError, GenericResponse}, model::user::{user::User, user_dto::{UserDTO, UserDTOMin}}, schema::users::{self}, services::auth::decode_jwt};
 use crate::schema::users::dsl::*;
 use base64::{prelude::BASE64_STANDARD_NO_PAD, Engine};
@@ -82,64 +83,73 @@ pub async fn index(query_params: web::Query<UserFilterRequest>) -> impl Responde
 
 /// Endpoint para cadastro de novos usuários
 pub async fn store(body: web::Json<UserStoreRequest>) -> impl Responder {
-    let mut data = body.into_inner();
+    let validate = body.validate();
     
-    // Gerar hash da senha passada no body
-    data.password = match bcrypt::hash(&data.password, 10) {
-        Ok(password_data) => password_data,
-        Err(_err) => panic!("Error while bcrypt password")
-    };
-
-    // Pegar a hora atual
-    let date_now = Utc::now();
-
-    let new_user = UserDTO{
-        name: data.name, 
-        email: data.email.clone(),
-        password: data.password,
-        two_factor_secret: None,
-        two_factor_recovery_code: None,
-        two_factor_confirmed_at: None,
-        created_at: Some(date_now), 
-        updated_at: Some(date_now), 
-        deleted_at: None
-    };
-
-    let conn = &mut get_connection().await.unwrap();
+    match validate {
+        Ok(_) => {
+            let mut data = body.into_inner();
     
-    // Query para criar o usuário
-    let create_user = diesel::insert_into(users::table)
-        .values(&new_user)
-        .get_result::<User>(conn)
-        .await;
-
-    match create_user {
-        Ok(user_created) => {
-
-            // Preparar dados da resposta
-            let response = UserStoreResponse{
-                message: "User stored successfuly!",
-                user: user_created
+            // Gerar hash da senha passada no body
+            data.password = match bcrypt::hash(&data.password, 10) {
+                Ok(password_data) => password_data,
+                Err(_err) => panic!("Error while bcrypt password")
             };
-
-            // Resposta com status 200
-            return HttpResponse::Ok()
-                .content_type(ContentType::json())
-                .json(response);
+        
+            // Pegar a hora atual
+            let date_now = Utc::now();
+        
+            let new_user = UserDTO{
+                name: data.name, 
+                email: data.email.clone(),
+                password: data.password,
+                two_factor_secret: None,
+                two_factor_recovery_code: None,
+                two_factor_confirmed_at: None,
+                created_at: Some(date_now), 
+                updated_at: Some(date_now), 
+                deleted_at: None
+            };
+        
+            let conn = &mut get_connection().await.unwrap();
+            
+            // Query para criar o usuário
+            let create_user = diesel::insert_into(users::table)
+                .values(&new_user)
+                .get_result::<User>(conn)
+                .await;
+        
+            match create_user {
+                Ok(user_created) => {
+        
+                    // Preparar dados da resposta
+                    let response = UserStoreResponse{
+                        message: "User stored successfuly!",
+                        user: user_created
+                    };
+        
+                    // Resposta com status 200
+                    return HttpResponse::Ok()
+                        .content_type(ContentType::json())
+                        .json(response);
+                },
+                Err(error) => {
+                    let error_msg = error.to_string();
+        
+                    // Preparar dados do erro interno para a resposta
+                    let response = UserStoreError{
+                        message: "Error while trying store User!",
+                        error: &error_msg
+                    };
+                    
+                    // Retornar dados com status 500
+                    return HttpResponse::InternalServerError()
+                        .content_type(ContentType::json())
+                        .json(response);
+                }
+            }
         },
         Err(error) => {
-            let error_msg = error.to_string();
-
-            // Preparar dados do erro interno para a resposta
-            let response = UserStoreError{
-                message: "Error while trying store User!",
-                error: &error_msg
-            };
-            
-            // Retornar dados com status 500
-            return HttpResponse::InternalServerError()
-                .content_type(ContentType::json())
-                .json(response);
+            return HttpResponse::BadRequest().content_type(ContentType::json()).json(error);
         }
     }
 }
@@ -149,135 +159,149 @@ pub async fn store(body: web::Json<UserStoreRequest>) -> impl Responder {
 /// Revisar: Usuários podem modificar outro usuário, implementar middleware de permissões.
 pub async fn update(path: web::Path<i32>, body: web::Json<UserUpdateRequest>) -> impl Responder {
 
-    let conn = &mut get_connection().await.unwrap();
+    let validate = body.validate();
 
-    // Consulta o usuario no banco pelo ID passado no path da requisição
-    let find_user  = users::table
-        .filter(users::id.eq(path.into_inner()))
-        .select(User::as_select())
-        .get_result::<User>(conn)
-        .await;
+    match validate {
+        Ok(_) => {
+            let conn = &mut get_connection().await.unwrap();
 
-    match find_user {
-        Ok(user_found) => {
+            // Consulta o usuario no banco pelo ID passado no path da requisição
+            let find_user  = users::table
+                .filter(users::id.eq(path.into_inner()))
+                .select(User::as_select())
+                .get_result::<User>(conn)
+                .await;
 
-            // Preparar uma struct mutavel para atualizar os campos necessários 
-            let mut new_updated_user = UserDTO {
-                name: user_found.name,
-                email: user_found.email,
-                password: user_found.password.clone(),
-                two_factor_secret: user_found.two_factor_secret,
-                two_factor_recovery_code: user_found.two_factor_recovery_code,
-                two_factor_confirmed_at: user_found.two_factor_confirmed_at,
-                created_at: user_found.created_at,
-                updated_at: user_found.updated_at,
-                deleted_at: user_found.deleted_at
-            };
-            
-            // Verificar se o usuario quer atualizar a senha atual
-            match &body.old_password {
-                Some(old_password) => {
+            match find_user {
+                Ok(user_found) => {
 
-                    // Verificar se a senha corresponde com a que está no banco
-                    match bcrypt::verify(old_password, &user_found.password) {
-                        Ok(result) => {
-    
-                            if result == true {
-    
-                                let new_password = match bcrypt::hash(body.new_password.clone().unwrap(), 10){
-                                    Ok(password_data) => password_data,
-                                    Err(_err) => panic!("Error while encrypt new password") // Revisar
-                                };
-    
-                                new_updated_user.password = new_password;
-                        
-                            } else {
-                                return HttpResponse::BadRequest()
-                                    .content_type(ContentType::json())
-                                    .json("Password confirmation gone wrong!");
-                            }
-                        },
-                        
-                        //Em caso de erro interno no processo de validação da senha antiga
-                        Err(err) => {
-                            
-                            let res_bcrypt_err = UserUpdateError {
-                                message: "Server wasnt able to parse old Password to confirm!",
-                                error: &err.to_string()
-                            };
-
-                            // Retornar resposta com status 500
-                            return HttpResponse::InternalServerError()
-                                .content_type(ContentType::json())
-                                .json(res_bcrypt_err);
-                        }
-                    };
-                },
-                None => {}, // Se não tiver o campo old_password, não faz nada
-            }
-
-            // Verificar se o campo de nome foi passado na requisição
-            match &body.name {
-                Some(new_name) => {new_updated_user.name = new_name.to_owned()},
-                None => {},
-            }
-
-            // Verificar se o campo de email foi passado na requisição
-            match &body.email {
-                Some(new_email) => {new_updated_user.email = new_email.to_owned()},
-                None => {},
-            }
-
-            // Setar o horario do update com o tempo universal coordenado sem offset de fuso horario (Revisar)
-            new_updated_user.updated_at = Some(Utc::now());
-
-            // Query para atualizar o usuario
-            let updated_user = diesel::update(
-                users::table.filter(users::id.eq(user_found.id))
-            ).set(new_updated_user).get_result::<User>(conn).await;
-
-            // Verificar resultado da query (sucesso ou erro interno)
-            match updated_user {
-
-                // Usuario atualizado
-                Ok(user) => {
-
-                    // Resposta de sucesso
-                    let res_updated_success = UserUpdateResponse {
-                        message: "User updated successfully!",
-                        user
+                    // Preparar uma struct mutavel para atualizar os campos necessários 
+                    let mut new_updated_user = UserDTO {
+                        name: user_found.name,
+                        email: user_found.email,
+                        password: user_found.password.clone(),
+                        two_factor_secret: user_found.two_factor_secret,
+                        two_factor_recovery_code: user_found.two_factor_recovery_code,
+                        two_factor_confirmed_at: user_found.two_factor_confirmed_at,
+                        created_at: user_found.created_at,
+                        updated_at: user_found.updated_at,
+                        deleted_at: user_found.deleted_at
                     };
                     
-                    // Responder com status 200
-                    return HttpResponse::Ok()
-                        .content_type(ContentType::json())
-                        .json(res_updated_success);
-                },
-                
-                // Erro interno ao executar a query
-                Err(_error) => {
+                    // Verificar se o usuario quer atualizar a senha atual
+                    match &body.old_password {
+                        Some(old_password) => {
 
+                            // Verificar se a senha corresponde com a que está no banco
+                            match bcrypt::verify(old_password, &user_found.password) {
+                                Ok(result) => {
+            
+                                    if result == true {
+            
+                                        let new_password = match bcrypt::hash(body.new_password.clone().unwrap(), 10){
+                                            Ok(password_data) => password_data,
+                                            Err(_err) => panic!("Error while encrypt new password") // Revisar
+                                        };
+            
+                                        new_updated_user.password = new_password;
+                                
+                                    } else {
+                                        let res_wrong_pass = UserUpdateError {
+                                            message: "Password confirmation gone wrong!",
+                                            error: "Old password is wrong! Try again."
+                                        };
+
+                                        return HttpResponse::Unauthorized()
+                                            .content_type(ContentType::json())
+                                            .json(res_wrong_pass);
+                                    }
+                                },
+                                
+                                //Em caso de erro interno no processo de validação da senha antiga
+                                Err(err) => {
+                                    
+                                    let res_bcrypt_err = UserUpdateError {
+                                        message: "Server wasnt able to parse old Password to confirm!",
+                                        error: &err.to_string()
+                                    };
+
+                                    // Retornar resposta com status 500
+                                    return HttpResponse::InternalServerError()
+                                        .content_type(ContentType::json())
+                                        .json(res_bcrypt_err);
+                                }
+                            };
+                        },
+                        None => {}, // Se não tiver o campo old_password, não faz nada
+                    }
+
+                    // Verificar se o campo de nome foi passado na requisição
+                    match &body.name {
+                        Some(new_name) => {new_updated_user.name = new_name.to_owned()},
+                        None => {},
+                    }
+
+                    // Verificar se o campo de email foi passado na requisição
+                    match &body.email {
+                        Some(new_email) => {new_updated_user.email = new_email.to_owned()},
+                        None => {},
+                    }
+
+                    // Setar o horario do update com o tempo universal coordenado sem offset de fuso horario (Revisar)
+                    new_updated_user.updated_at = Some(Utc::now());
+
+                    // Query para atualizar o usuario
+                    let updated_user = diesel::update(
+                        users::table.filter(users::id.eq(user_found.id))
+                    ).set(new_updated_user).get_result::<User>(conn).await;
+
+                    // Verificar resultado da query (sucesso ou erro interno)
+                    match updated_user {
+
+                        // Usuario atualizado
+                        Ok(user) => {
+
+                            // Resposta de sucesso
+                            let res_updated_success = UserUpdateResponse {
+                                message: "User updated successfully!",
+                                user
+                            };
+                            
+                            // Responder com status 200
+                            return HttpResponse::Ok()
+                                .content_type(ContentType::json())
+                                .json(res_updated_success);
+                        },
+                        
+                        // Erro interno ao executar a query
+                        Err(_error) => {
+
+                            let res_err = UserUpdateError {
+                                message: "Error trying update user!",
+                                error: "User was not found!"
+                            };
+
+                            return HttpResponse::NotFound()
+                            .content_type(ContentType::json())
+                            .json(res_err);
+                        }
+                    }
+
+                },
+                Err(_err) => {
                     let res_err = UserUpdateError {
                         message: "Error trying update user!",
-                        error: "Internal Server error on update user query."
+                        error: "Internal server error raised while looking for user in Database"
                     };
 
                     return HttpResponse::InternalServerError()
-                    .content_type(ContentType::json())
-                    .json(res_err);
+                        .content_type(ContentType::json())
+                        .json(res_err);
                 }
             }
-
         },
-        Err(_err) => {
-            let res_err = UserUpdateError {
-                message: "Error trying update user!",
-                error: "Internal server error raised while looking for user in Database"
-            };
-
-            return HttpResponse::InternalServerError()
-                .content_type(ContentType::json())
-                .json(res_err);
+        Err(error) => {
+            return HttpResponse::BadRequest().content_type(ContentType::json()).json(error);
         }
     }
 
@@ -351,7 +375,7 @@ pub async fn delete_my_account(req: HttpRequest) -> impl Responder{
                     error: "Your auth value may not be a valid Json Web Token."
                 };
 
-                return HttpResponse::BadRequest()
+                return HttpResponse::Unauthorized()
                     .content_type(ContentType::json())
                     .json(error_json);
                 
@@ -363,7 +387,7 @@ pub async fn delete_my_account(req: HttpRequest) -> impl Responder{
             error: "No JWT Token was provided."
         };
 
-        return HttpResponse::BadRequest()
+        return HttpResponse::Unauthorized()
             .content_type(ContentType::json())
             .json(error_json);
     }
@@ -485,7 +509,7 @@ pub async fn enable_2fa(req: HttpRequest) -> impl Responder {
                         error: "User not found."
                     };
         
-                    return HttpResponse::BadRequest()
+                    return HttpResponse::NotFound()
                         .content_type(ContentType::json())
                         .json(res_err);
                 }
@@ -512,162 +536,170 @@ pub async fn enable_2fa(req: HttpRequest) -> impl Responder {
 /// Para que a instância do One Timed Password valide o código passado na requisição,
 /// é necessário que o dispositivo do usuário esteja sincronizado com o Horário Universal Coordenado
 pub async fn activate_2fa(req: HttpRequest, body: web::Json<UserActivate2FARequest>) -> impl Responder {
-    
-    // Pegar token do header na requisição
-    let token = req.headers().get("Authorization").unwrap();
+    let validate = body.validate();
 
-    
-    match decode_jwt(token.to_str().expect("Error casting headervalue to &str")) {
-        Ok(claim) => {
-            
-            let conn = &mut get_connection().await.unwrap();
+    match validate {
+        Ok(_) => {
+            // Pegar token do header na requisição
+            let token = req.headers().get("Authorization").unwrap();
 
-            // Consultar usuario no banco
-            let user = users::table
-                .filter(users::email.eq(claim.sub))
-                .select(User::as_select())
-                .get_result::<User>(conn)
-                .await;
-            
-            match user {
-                Ok(user_found) => {
+            match decode_jwt(token.to_str().expect("Error casting headervalue to &str")) {
+                Ok(claim) => {
                     
-                    // Verificar se o usuario encontrado possui a chave de configuração do 2FA
-                    match user_found.two_factor_secret {
-                        Some(secret) => {
+                    let conn = &mut get_connection().await.unwrap();
+        
+                    // Consultar usuario no banco
+                    let user = users::table
+                        .filter(users::email.eq(claim.sub))
+                        .select(User::as_select())
+                        .get_result::<User>(conn)
+                        .await;
+                    
+                    match user {
+                        Ok(user_found) => {
                             
-                            // Pegar o horário universal coordenado e o nome do app (.env)
-                            let date_now = Utc::now();
-                            let app_name = dotenv!("APP_NAME");
-
-                            // Criar a instância do One Timed Password com as configurações do usuario
-                            let totp = TOTP::new(
-                                Algorithm::SHA512,
-                                6,
-                                1,
-                                30,
-                                Secret::Encoded(secret.clone()).to_bytes().unwrap(),
-                                Some(app_name.to_string()),
-                                user_found.email.clone()
-                            ).unwrap();
-
-                            // Aproximar o valor da data/hora para o horario Unix (segundos desde 01/01/1970)
-                            let seconds_now = ((Utc::now().timestamp_millis()) / 1000) as u64;
-
-                            /* 
-                                * Verificar se o código passado na requisição é valido baseado com 
-                                * a aproximação feita pro horário Unix
-                            */
-                            if totp.check(body.code.as_str(), seconds_now) == true {
-                                
-                                // Preparar Struct com o 2FA confirmado (data/hora atual UTC)
-                                let new_updated_user = UserDTO {
-                                    name: user_found.name,
-                                    email: user_found.email,
-                                    password: user_found.password,
-                                    two_factor_secret:  Some(secret),
-                                    two_factor_recovery_code: user_found.two_factor_recovery_code,
-                                    two_factor_confirmed_at: Some(date_now),
-                                    created_at: user_found.created_at,
-                                    updated_at: Some(date_now),
-                                    deleted_at: user_found.deleted_at
-                                };
-
-                                // Query para atualizar usuario com o 2FA confirmado
-                                let user_updated_2fa_on = diesel::update(users::table.filter(users::id.eq(user_found.id)))
-                                    .set(new_updated_user)
-                                    .execute(conn)
-                                    .await;
-
-                                // Verificar se a alteração foi realizada no banco
-                                match user_updated_2fa_on {
-                                    Ok(rows) => {
-                                        if rows > 0 {
-                                            
-                                            // Sucesso, 2FA configurado para o usuario
-                                            let response = GenericResponse {
-                                                message: "2FA setted up successfully!"
-                                            }; 
-                                            
-                                            return HttpResponse::Ok().content_type(ContentType::json()).json(response);
-                                
-                                        } else {
-
-                                            // Caso a query tenha rodado mas o usuario não foi alterado no banco
-                                            let response = GenericError {
-                                                message: "Error setting up 2FA!",
-                                                error: "Query gone fine but 2FA Challenge was not confirmed on our side"
-                                            }; 
-                                
-                                            return HttpResponse::NotFound().content_type(ContentType::json()).json(response);   
-
+                            // Verificar se o usuario encontrado possui a chave de configuração do 2FA
+                            match user_found.two_factor_secret {
+                                Some(secret) => {
+                                    
+                                    // Pegar o horário universal coordenado e o nome do app (.env)
+                                    let date_now = Utc::now();
+                                    let app_name = dotenv!("APP_NAME");
+        
+                                    // Criar a instância do One Timed Password com as configurações do usuario
+                                    let totp = TOTP::new(
+                                        Algorithm::SHA512,
+                                        6,
+                                        1,
+                                        30,
+                                        Secret::Encoded(secret.clone()).to_bytes().unwrap(),
+                                        Some(app_name.to_string()),
+                                        user_found.email.clone()
+                                    ).unwrap();
+        
+                                    // Aproximar o valor da data/hora para o horario Unix (segundos desde 01/01/1970)
+                                    let seconds_now = ((Utc::now().timestamp_millis()) / 1000) as u64;
+        
+                                    /* 
+                                        * Verificar se o código passado na requisição é valido baseado com 
+                                        * a aproximação feita pro horário Unix
+                                    */
+                                    if totp.check(body.code.as_str(), seconds_now) == true {
+                                        
+                                        // Preparar Struct com o 2FA confirmado (data/hora atual UTC)
+                                        let new_updated_user = UserDTO {
+                                            name: user_found.name,
+                                            email: user_found.email,
+                                            password: user_found.password,
+                                            two_factor_secret:  Some(secret),
+                                            two_factor_recovery_code: user_found.two_factor_recovery_code,
+                                            two_factor_confirmed_at: Some(date_now),
+                                            created_at: user_found.created_at,
+                                            updated_at: Some(date_now),
+                                            deleted_at: user_found.deleted_at
+                                        };
+        
+                                        // Query para atualizar usuario com o 2FA confirmado
+                                        let user_updated_2fa_on = diesel::update(users::table.filter(users::id.eq(user_found.id)))
+                                            .set(new_updated_user)
+                                            .execute(conn)
+                                            .await;
+        
+                                        // Verificar se a alteração foi realizada no banco
+                                        match user_updated_2fa_on {
+                                            Ok(rows) => {
+                                                if rows > 0 {
+                                                    
+                                                    // Sucesso, 2FA configurado para o usuario
+                                                    let response = GenericResponse {
+                                                        message: "2FA setted up successfully!"
+                                                    }; 
+                                                    
+                                                    return HttpResponse::Ok().content_type(ContentType::json()).json(response);
+                                        
+                                                } else {
+        
+                                                    // Caso a query tenha rodado mas o usuario não foi alterado no banco
+                                                    let response = GenericError {
+                                                        message: "Error setting up 2FA!",
+                                                        error: "Query gone fine but 2FA Challenge was not confirmed on our side"
+                                                    }; 
+                                        
+                                                    return HttpResponse::NotFound().content_type(ContentType::json()).json(response);   
+        
+                                                }
+        
+                                            },
+                                            Err(_) => {
+                                                let response = GenericError {
+                                                    message: "Error setting up 2FA!",
+                                                    error: "Internal Server error querying to DB"
+                                                }; 
+                                    
+                                                return HttpResponse::InternalServerError().content_type(ContentType::json()).json(response);
+                                            }
                                         }
-
-                                    },
-                                    Err(_) => {
+                                    } else {
                                         let response = GenericError {
                                             message: "Error setting up 2FA!",
-                                            error: "Internal Server error querying to DB"
+                                            error: "Invalid code, user failed 2FA Challenge!"
                                         }; 
-                            
-                                        return HttpResponse::InternalServerError().content_type(ContentType::json()).json(response);
+        
+                                        return HttpResponse::Unauthorized()
+                                            .content_type(ContentType::json())
+                                            .json(response);
                                     }
+        
+                                },
+                                None => {
+        
+                                    /* 
+                                        * Se o usuario não tem a chave configurada, 
+                                        * foi porque ele não solicitou o 2FA para a sua conta ainda
+                                    */
+                                    let res_2fa_not_requested = GenericError {
+                                        message: "Error trying confirm 2FA code for user!",
+                                        error: "User did not request 2FA challenge!"
+                                    };
+        
+                                    return HttpResponse::Unauthorized()
+                                        .content_type(ContentType::json())
+                                        .json(res_2fa_not_requested);
                                 }
-                            } else {
-                                let response = GenericError {
-                                    message: "Error setting up 2FA!",
-                                    error: "Invalid code, user failed 2FA Challenge!"
-                                }; 
-
-                                return HttpResponse::Unauthorized()
-                                    .content_type(ContentType::json())
-                                    .json(response);
-                            }
-
-                        },
-                        None => {
-
-                            /* 
-                                * Se o usuario não tem a chave configurada, 
-                                * foi porque ele não solicitou o 2FA para a sua conta ainda
-                            */
-                            let res_2fa_not_requested = GenericError {
-                                message: "Error trying confirm 2FA code for user!",
-                                error: "User did not request 2FA challenge!"
-                            };
-
-                            return HttpResponse::Unauthorized()
-                                .content_type(ContentType::json())
-                                .json(res_2fa_not_requested);
                         }
+                    }, Err(_err) => {
+        
+                        // Caso as credenciais carregadas no token forem inválidas
+                        let res_2fa_not_requested = GenericError {
+                            message: "No user Logged!",
+                            error: "Your token claims are not valid."
+                        };
+        
+                        return HttpResponse::Unauthorized()
+                            .content_type(ContentType::json())
+                            .json(res_2fa_not_requested);
+                    }
                 }
-            }, Err(_err) => {
-
-                // Caso as credenciais carregadas no token forem inválidas
-                let res_2fa_not_requested = GenericError {
-                    message: "No user Logged!",
-                    error: "Your token claims are not valid."
-                };
-
-                return HttpResponse::Unauthorized()
-                    .content_type(ContentType::json())
-                    .json(res_2fa_not_requested);
+            },
+            Err(_err) => {
+                    
+                    // Caso o token for inválido
+                    let error_response = GenericError {
+                        message: "No user Logged!",
+                        error: "Invalid Authorization token."
+                    };
+        
+                    return HttpResponse::Unauthorized()
+                        .content_type(ContentType::json())
+                        .json(error_response);
+                }
             }
-        }
-    },
-    Err(_err) => {
-            
-            // Caso o token for inválido
-            let error_response = GenericError {
-                message: "No user Logged!",
-                error: "Invalid Authorization token."
-            };
-
-            return HttpResponse::Unauthorized()
-                .content_type(ContentType::json())
-                .json(error_response);
+        },
+        Err(error) => {
+            return HttpResponse::BadRequest().content_type(ContentType::json()).json(error);
         }
     }
+    
 }
 
 // Endpoints do controller

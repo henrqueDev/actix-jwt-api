@@ -4,60 +4,109 @@ use diesel::{ExpressionMethods, QueryDsl, SelectableHelper};
 use diesel_async::RunQueryDsl;
 use totp_rs::{Algorithm, Secret, TOTP};
 use dotenvy_macro::dotenv;
+use validator::Validate;
 use crate::{database::db::get_connection, http::{requests::auth::auth_login_request::AuthLoginRequest, responses::auth::auth_login_response::{AuthLoginError, AuthLoginResponse}, GenericError, GenericResponse}, model::user::user::User, schema::users, services::auth::{decode_jwt, encode_jwt}};
 
 /// Endpoint para o usuário efetuar o Login
 pub async fn login(body: web::Json<AuthLoginRequest>) -> impl Responder {
+    let validate = body.validate();
     
-    let conn = &mut get_connection().await.unwrap();
+    match validate {
+        Ok(_) => {
+            let conn = &mut get_connection().await.unwrap();
 
-    // Consulta o usuario a partir do email fornecido no body da requisição
-    let get_user = users::table
-        .filter(users::email.eq(&body.email))
-        .select(User::as_select())
-        .get_result::<User>(conn)
-        .await;
-    
-    // Verificar resultado da consulta
-    match get_user {
-        Ok(user) => {
+            // Consulta o usuario a partir do email fornecido no body da requisição
+            let get_user = users::table
+                .filter(users::email.eq(&body.email))
+                .select(User::as_select())
+                .get_result::<User>(conn)
+                .await;
             
-            //Verificar se o usuario possui 2FA ativado
-            match user.two_factor_confirmed_at {
-                Some(_confirmed_at) => {
-                        
-                        // Verificar se a senha está correta
-                        let result = bcrypt::verify(body.password.as_bytes(),&user.password.as_ref()).unwrap();
-
-                        if result == true {
-                            let app_name = dotenv!("APP_NAME");
-                            
-                            // Aproximar o valor da data/hora para o horario Unix (segundos desde 01/01/1970)
-                            let seconds_now = ((Utc::now().timestamp_millis()) / 1000) as u64;
-                            
-                            let totp = TOTP::new(
-                                Algorithm::SHA512,
-                                6,
-                                1,
-                                30,
-                                Secret::Encoded(user.two_factor_secret.unwrap()).to_bytes().unwrap(),
-                                Some(app_name.to_string()),
-                                user.email.clone()
-                            ).unwrap();
-
-                            /* 
-                                * Pegar a referência do código passado na requisição 
-                                * (Se não tiver, pega uma ref. de String vazia)
-                            */
-                            let code = &body.code.clone().unwrap_or_else(|| "".to_owned());
-
-                            // Checar se o código é valido, dado o horario Unix
-                            if totp.check(code, seconds_now) == true {
-
-                                // Se válido, retornar o token de acesso para o usuário
-                                let token = encode_jwt(user.email);        
+            // Verificar resultado da consulta
+            match get_user {
+                Ok(user) => {
+                    
+                    //Verificar se o usuario possui 2FA ativado
+                    match user.two_factor_confirmed_at {
+                        Some(_confirmed_at) => {
                                 
-                                let response = AuthLoginResponse {
+                                // Verificar se a senha está correta
+                                let result = bcrypt::verify(body.password.as_bytes(),&user.password.as_ref()).unwrap();
+
+                                if result == true {
+                                    let app_name = dotenv!("APP_NAME");
+                                    
+                                    // Aproximar o valor da data/hora para o horario Unix (segundos desde 01/01/1970)
+                                    let seconds_now = ((Utc::now().timestamp_millis()) / 1000) as u64;
+                                    
+                                    let totp = TOTP::new(
+                                        Algorithm::SHA512,
+                                        6,
+                                        1,
+                                        30,
+                                        Secret::Encoded(user.two_factor_secret.unwrap()).to_bytes().unwrap(),
+                                        Some(app_name.to_string()),
+                                        user.email.clone()
+                                    ).unwrap();
+
+                                    /* 
+                                        * Pegar a referência do código passado na requisição 
+                                        * (Se não tiver, pega uma ref. de String vazia)
+                                    */
+                                    let code = &body.code.clone().unwrap_or_else(|| "".to_owned());
+
+                                    // Checar se o código é valido, dado o horario Unix
+                                    if totp.check(code, seconds_now) == true {
+
+                                        // Se válido, retornar o token de acesso para o usuário
+                                        let token = encode_jwt(user.email);        
+                                        
+                                        let response = AuthLoginResponse {
+                                            message: "Login successful",
+                                            token: Some(&token)
+                                        }; 
+                        
+                                        return HttpResponse::Ok()
+                                            .content_type(ContentType::json())
+                                            .json(response);
+                                    } else {
+                                        /*
+                                            * Se o código do 2FA não é valido, 
+                                            * verificar se o código foi passado é de fato invalido (Cod. 401)
+                                        */
+                                        
+                                        let response = GenericResponse {
+                                            message: "2FA challenge failed! Try again."
+                                        };
+        
+                                        return HttpResponse::Unauthorized()
+                                            .content_type(ContentType::json())
+                                            .json(response);
+                                            
+                                    }
+                                } else {
+                                    
+                                    // Caso email ou senha forem invalidos (COM 2FA)
+                                    let response = AuthLoginError{
+                                        message: "Error trying to Login!",
+                                        error: "Invalid email or password."
+                                    };
+                    
+                                    return HttpResponse::NotFound()
+                                        .content_type(ContentType::json())
+                                        .json(response);
+                                }
+                            },
+                        None => {
+
+                            // Sem 2FA, apenas verificar se a senha está correta
+                            let result = bcrypt::verify(body.password.as_bytes(),&user.password).unwrap();
+                            
+                            if result == true {
+                                
+                                // Enviar token e msg de sucesso para o usuário
+                                let token = encode_jwt(user.email);        
+                                let response = AuthLoginResponse{
                                     message: "Login successful",
                                     token: Some(&token)
                                 }; 
@@ -66,91 +115,40 @@ pub async fn login(body: web::Json<AuthLoginRequest>) -> impl Responder {
                                     .content_type(ContentType::json())
                                     .json(response);
                             } else {
-                                /*
-                                    * Se o código do 2FA não é valido, 
-                                    * verificar se o código foi passado e de fato é invalido (Cod. 401)
-                                    * ou se estava apenas faltando na requisição (Cod. 400)
-                                */
-                                match code == "" {
-                                    true => {
-                                        let response = GenericResponse {
-                                            message: "Missing 2FA code in request!"
-                                        };
-        
-                                        return HttpResponse::Unauthorized()
-                                            .content_type(ContentType::json())
-                                            .json(response);
-                                    },
-                                    false => {
-                                        let response = GenericResponse {
-                                            message: "2FA challenge failed! Try again."
-                                        };
-        
-                                        return HttpResponse::BadRequest()
-                                            .content_type(ContentType::json())
-                                            .json(response);
-                                    }
-                                }
+                                
+                                // Caso email ou senha forem invalidos (sem 2FA)
+                                let response = AuthLoginError{
+                                    message: "Error trying to Login!",
+                                    error: "Invalid email or password."
+                                };
+                
+                                return HttpResponse::NotFound()
+                                    .content_type(ContentType::json())
+                                    .json(response);
                             }
-                        } else {
-                            
-                            // Caso email ou senha forem invalidos (COM 2FA)
-                            let response = AuthLoginError{
-                                message: "Error trying to Login!",
-                                error: "Invalid email or password."
-                            };
-            
-                            return HttpResponse::NotFound()
-                                .content_type(ContentType::json())
-                                .json(response);
                         }
-                    },
-                None => {
-
-                    // Sem 2FA, apenas verificar se a senha está correta
-                    let result = bcrypt::verify(body.password.as_bytes(),&user.password).unwrap();
-                    
-                    if result == true {
-                        
-                        // Enviar token e msg de sucesso para o usuário
-                        let token = encode_jwt(user.email);        
-                        let response = AuthLoginResponse{
-                            message: "Login successful",
-                            token: Some(&token)
-                        }; 
-        
-                        return HttpResponse::Ok()
-                            .content_type(ContentType::json())
-                            .json(response);
-                    } else {
-                        
-                        // Caso email ou senha forem invalidos (sem 2FA)
-                        let response = AuthLoginError{
-                            message: "Error trying to Login!",
-                            error: "Invalid email or password."
-                        };
-        
-                        return HttpResponse::NotFound()
-                            .content_type(ContentType::json())
-                            .json(response);
                     }
+                    
+                },
+                Err(_error) => {
+                    let response = AuthLoginError{
+                        message: "Error trying to login!",
+                        error: "Internal Server error looking for user in DB"
+                    };
+
+                    return HttpResponse::NotFound()
+                            .content_type(ContentType::json())
+                            .json(response);
                 }
             }
-            
         },
-        Err(_error) => {
-            let response = AuthLoginError{
-                message: "Error trying to login!",
-                error: "Internal Server error looking for user in DB"
-            };
-
-            return HttpResponse::NotFound()
-                    .content_type(ContentType::json())
-                    .json(response);
+        Err(error) => {
+            return HttpResponse::BadRequest().content_type(ContentType::json()).json(error)
         }
     }
-    
 }
+    
+
 
 /// Endpoint que valida e retorna credenciais carregadas no token JWT passado no header da requisição
 pub async fn validate_token(req: HttpRequest) -> impl Responder {
