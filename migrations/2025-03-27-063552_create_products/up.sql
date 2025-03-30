@@ -10,7 +10,7 @@ CREATE TABLE products (
     dimension_width REAL NOT NULL, -- Dimensões em metros
     dimension_depth REAL NOT NULL,
     product_category_id INTEGER NOT NULL REFERENCES product_categories(id),
-    created_at timestamp without time zone,
-    updated_at timestamp without time zone,
-    deleted_at timestamp without time zone
+    created_at timestamp with time zone,
+    updated_at timestamp with time zone,
+    deleted_at timestamp with time zone
 );
