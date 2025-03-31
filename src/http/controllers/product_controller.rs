@@ -228,6 +228,7 @@ async fn update(path: web::Path<u32>,body: web::Json<ProductUpdateRequest>) -> i
     }
 }
 
+/// Endpoint para cadastrar novo Produto
 async fn store(body: web::Json<ProductStoreRequest>) -> impl Responder {
     let validate = body.validate();
 
