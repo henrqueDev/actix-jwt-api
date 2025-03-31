@@ -303,48 +303,59 @@ pub async fn delete(path: web::Path<u32>) -> impl Responder{
 
     match product {
         Ok(product) => {
-            let mut product_to_delete = ProductDTO {
-                sku: product.sku,
-                name: product.name,
-                description: product.description,
-                price: product.price,
-                weight: product.weight,
-                dimension_height: product.dimension_height,
-                dimension_width: product.dimension_width,
-                dimension_depth: product.dimension_depth,
-                product_category_id: product.product_category_id,
-                created_at: product.created_at,
-                updated_at: product.updated_at,
-                deleted_at: product.deleted_at,
-            };
-
-            let time_now = Utc::now();
-
-            // Exclusão Lógica
-            product_to_delete.deleted_at = Some(time_now);
-
-            let delete_product = diesel::update(products::table.filter(products::id.eq(id as i32)))
-                .set(product_to_delete).get_result::<Product>(conn).await;
-
-            match delete_product {
-                Ok(product_deleted) => {
-                    let success_restore_product = ProductUpdateResponse {
-                        message: "Product deleted successfully!",
-                        product: product_deleted
-                    };
-
-                    return HttpResponse::Ok().content_type(ContentType::json()).json(success_restore_product);
-                },
-                Err(_) => {
+            match &product.deleted_at {
+                Some(_) => {
                     let err_not_found = GenericError {
                         message: "Error deleting product!",
-                        error: "Internal server error while deleting product!"
+                        error: "Product was already deleted."
                     };
-
-                    return HttpResponse::InternalServerError().content_type(ContentType::json()).json(err_not_found);
+        
+                    return HttpResponse::Conflict().content_type(ContentType::json()).json(err_not_found);        
+                },
+                None => {
+                    let mut product_to_delete = ProductDTO {
+                        sku: product.sku,
+                        name: product.name,
+                        description: product.description,
+                        price: product.price,
+                        weight: product.weight,
+                        dimension_height: product.dimension_height,
+                        dimension_width: product.dimension_width,
+                        dimension_depth: product.dimension_depth,
+                        product_category_id: product.product_category_id,
+                        created_at: product.created_at,
+                        updated_at: product.updated_at,
+                        deleted_at: product.deleted_at,
+                    };
+        
+                    let time_now = Utc::now();
+        
+                    // Exclusão Lógica
+                    product_to_delete.deleted_at = Some(time_now);
+        
+                    let delete_product = diesel::update(products::table.filter(products::id.eq(id as i32)))
+                        .set(product_to_delete).get_result::<Product>(conn).await;
+        
+                    match delete_product {
+                        Ok(product_deleted) => {
+                            let success_restore_product = ProductUpdateResponse {
+                                message: "Product deleted successfully!",
+                                product: product_deleted
+                            };
+        
+                            return HttpResponse::Ok().content_type(ContentType::json()).json(success_restore_product);
+                        },
+                        Err(_) => {
+                            let err_not_found = GenericError {
+                                message: "Error deleting product!",
+                                error: "Internal server error while deleting product!"
+                            };
+        
+                            return HttpResponse::InternalServerError().content_type(ContentType::json()).json(err_not_found);
+                        }
+                    }
                 }
             }
-
 
         }, Err(_error) => {
             let err_not_found = GenericError {
@@ -352,7 +363,7 @@ pub async fn delete(path: web::Path<u32>) -> impl Responder{
                 error: "Product was not found."
             };
 
-            return HttpResponse::NotFound().content_type(ContentType::json()).json(err_not_found);
+            return HttpResponse::NotFound().content_type(ContentType::json()).json(err_not_found);            
         }
     }
 }
@@ -394,7 +405,7 @@ pub async fn restore(path: web::Path<u32>) -> impl Responder{
             match product_restore {
                 Ok(product_restored) => {
                     let success_restore_product = ProductUpdateResponse {
-                        message: "Product deleted successfully!",
+                        message: "Product restored successfully!",
                         product: product_restored
                     };
 
