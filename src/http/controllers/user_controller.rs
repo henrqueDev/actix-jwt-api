@@ -65,7 +65,7 @@ pub async fn index(query_params: web::Query<UserFilterRequest>) -> impl Responde
             };
 
             // Resposta status 200
-            HttpResponse::Ok().content_type(ContentType::json()).json(users_response)
+            return HttpResponse::Ok().content_type(ContentType::json()).json(users_response);
         },
         Err(_err) => {
             
@@ -77,9 +77,9 @@ pub async fn index(query_params: web::Query<UserFilterRequest>) -> impl Responde
             };
 
             // Resposta com status 500
-            HttpResponse::InternalServerError()
+            return HttpResponse::InternalServerError()
             .content_type(ContentType::json())
-            .json(error_response)
+            .json(error_response);
         }
     }
 }
