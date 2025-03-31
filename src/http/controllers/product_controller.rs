@@ -1,10 +1,93 @@
 use actix_web::{http::header::ContentType, middleware::from_fn, web::{self, ServiceConfig}, HttpResponse, Responder};
 use chrono::Utc;
-use diesel::{ExpressionMethods, QueryDsl, SelectableHelper};
+use diesel::{ExpressionMethods, QueryDsl, SelectableHelper, TextExpressionMethods};
 use diesel_async::RunQueryDsl;
 use validator::Validate;
-use crate::{database::db::get_connection, http::{middleware::auth_middleware::auth_middleware, requests::product::{product_store_request::ProductStoreRequest, product_update_request::ProductUpdateRequest}, GenericError}, model::product::{product::Product, product_dto::ProductDTO}, schema::{product_categories, products}};
+use crate::{database::db::get_connection, http::{middleware::auth_middleware::auth_middleware, requests::product::{product_filter_request::ProductFilterRequest, product_store_request::ProductStoreRequest, product_update_request::ProductUpdateRequest}, responses::product::product_update_response::ProductUpdateResponse, GenericError}, model::product::{product::Product, product_dto::ProductDTO}, schema::{product_categories, products}};
+use crate::http::responses::product::product_index_response::ProductIndexResponse;
 
+/// Endpoint para consulta de products com filtros opcionais
+pub async fn index(query_params: web::Query<ProductFilterRequest>) -> impl Responder {
+
+    let conn = &mut get_connection().await.unwrap();
+
+    let mut query = products::table.into_boxed();
+
+    // Aplicando filtros na consulta (Revisar o framework)
+    if let Some(id_query) = query_params.0.id {
+        query = query.filter(products::id.eq(id_query));
+    }
+
+    if let Some(name_query) = query_params.0.name {
+        query = query.filter(products::name.like(format!("%{}%", name_query)));
+    }
+
+    if let Some(sku_query) = query_params.0.sku {
+        query = query.filter(products::sku.eq(format!("%{}%", sku_query)));
+    }
+
+    if let Some(description_query) = query_params.0.description {
+        query = query.filter(products::description.like(format!("%{}%", description_query)));
+    }
+
+    if let Some(dimension_width_query) = query_params.0.dimension_width {
+        query = query.filter(products::dimension_width.ge(dimension_width_query));
+    }
+
+
+    // Filtro de paginação
+    if let Some(page_query) = query_params.0.page {
+        
+        let per_page = match query_params.0.per_page {
+            Some(per_page) => per_page,
+            None => 5, // per_page padrão é 5
+        };
+        
+        let offset_num = ((page_query - 1) * per_page) as i64;
+        query = query.limit(per_page as i64).offset(offset_num);
+    }
+
+    // Apenas listar produtos não excluidos
+    query = query.filter(products::deleted_at.is_null());
+
+    // Consulta na tabela de products, retornando a struct Product
+    let results = query
+        .select(Product::as_select())
+        .get_results::<Product>(conn)
+        .await;
+
+    // Verificar se a consulta foi um sucesso (revisar tipagem do retorno de erro)
+    match results {
+        Ok(query_products) => {
+
+            // Preparando dados para retornar para o client
+            let products_response = ProductIndexResponse {
+                message: "Query products gone successfully!",
+                products: query_products,
+                current_page: query_params.0.page,
+                per_page: query_params.0.per_page
+            };
+
+            // Resposta status 200
+            return HttpResponse::Ok().content_type(ContentType::json()).json(products_response);
+        },
+        Err(_err) => {
+
+            // Erro interno no servidor durante consulta no banco
+            let error_response = GenericError {
+                message: "Error querying products on DB!",
+                error: "Internal Server error while querying products."
+            };
+
+            // Resposta com status 500
+            return HttpResponse::InternalServerError()
+            .content_type(ContentType::json())
+            .json(error_response);
+        }
+    }
+}
+
+/// Endpoint para atualizar produto
 async fn update(path: web::Path<u32>,body: web::Json<ProductUpdateRequest>) -> impl Responder {
     
     let validate = body.validate();
@@ -206,6 +289,7 @@ pub fn config(cfg: &mut ServiceConfig) -> () {
     web::scope("/products")
                 .route("/update/{id}", web::put().to(update))
                 .route("/store", web::post().to(store))
+                .route("/index", web::get().to(index))
                 .wrap(from_fn(auth_middleware))
     );
 }
