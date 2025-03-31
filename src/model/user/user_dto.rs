@@ -5,6 +5,7 @@ use crate::schema::users;
 
 #[derive(Insertable, Debug, PartialEq, Serialize, Deserialize, Clone, AsChangeset)]
 #[diesel(table_name = users)]
+#[changeset_options(treat_none_as_null = "true")]
 pub struct UserDTO {
     pub name: String,
     pub email: String,
