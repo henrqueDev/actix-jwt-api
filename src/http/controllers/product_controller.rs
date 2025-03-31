@@ -303,7 +303,7 @@ pub async fn delete(path: web::Path<u32>) -> impl Responder{
 
     match product {
         Ok(product) => {
-            let mut product_to_restore = ProductDTO {
+            let mut product_to_delete = ProductDTO {
                 sku: product.sku,
                 name: product.name,
                 description: product.description,
@@ -321,24 +321,24 @@ pub async fn delete(path: web::Path<u32>) -> impl Responder{
             let time_now = Utc::now();
 
             // Exclusão Lógica
-            product_to_restore.deleted_at = Some(time_now);
+            product_to_delete.deleted_at = Some(time_now);
 
-            let restore_product = diesel::update(products::table.filter(products::id.eq(id as i32)))
-                .set(product_to_restore).get_result::<Product>(conn).await;
+            let delete_product = diesel::update(products::table.filter(products::id.eq(id as i32)))
+                .set(product_to_delete).get_result::<Product>(conn).await;
 
-            match restore_product {
-                Ok(product_restored) => {
+            match delete_product {
+                Ok(product_deleted) => {
                     let success_restore_product = ProductUpdateResponse {
-                        message: "Product restored successfully!",
-                        product: product_restored
+                        message: "Product deleted successfully!",
+                        product: product_deleted
                     };
 
                     return HttpResponse::Ok().content_type(ContentType::json()).json(success_restore_product);
                 },
                 Err(_) => {
                     let err_not_found = GenericError {
-                        message: "Error updating product!",
-                        error: "Internal server error while updating product!"
+                        message: "Error deleting product!",
+                        error: "Internal server error while deleting product!"
                     };
 
                     return HttpResponse::InternalServerError().content_type(ContentType::json()).json(err_not_found);
@@ -348,7 +348,7 @@ pub async fn delete(path: web::Path<u32>) -> impl Responder{
 
         }, Err(_error) => {
             let err_not_found = GenericError {
-                message: "Error updating product!",
+                message: "Error deleting product!",
                 error: "Product was not found."
             };
 
@@ -370,7 +370,7 @@ pub async fn restore(path: web::Path<u32>) -> impl Responder{
 
     match product {
         Ok(product) => {
-            let mut new_product_updated = ProductDTO {
+            let mut product_to_restore = ProductDTO {
                 sku: product.sku,
                 name: product.name,
                 description: product.description,
@@ -386,14 +386,19 @@ pub async fn restore(path: web::Path<u32>) -> impl Responder{
             };
 
             // Restaurar produto
-            new_product_updated.deleted_at = None;
+            product_to_restore.deleted_at = None;
 
-            let update_product = diesel::update(products::table.filter(products::id.eq(id as i32)))
-                .set(new_product_updated).get_result::<Product>(conn).await;
+            let product_restore = diesel::update(products::table.filter(products::id.eq(id as i32)))
+                .set(product_to_restore).get_result::<Product>(conn).await;
 
-            match update_product {
-                Ok(product_updated) => {
-                    return HttpResponse::Ok().content_type(ContentType::json()).json(product_updated);
+            match product_restore {
+                Ok(product_restored) => {
+                    let success_restore_product = ProductUpdateResponse {
+                        message: "Product deleted successfully!",
+                        product: product_restored
+                    };
+
+                    return HttpResponse::Ok().content_type(ContentType::json()).json(success_restore_product);
                 },
                 Err(_) => {
                     let err_not_found = GenericError {
