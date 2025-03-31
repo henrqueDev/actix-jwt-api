@@ -193,7 +193,13 @@ async fn update(path: web::Path<u32>,body: web::Json<ProductUpdateRequest>) -> i
 
                     match update_product {
                         Ok(product_updated) => {
-                            return HttpResponse::Ok().content_type(ContentType::json()).json(product_updated);
+                            
+                            let success_response = ProductUpdateResponse {
+                                message: "Product stored successfully!",
+                                product: product_updated
+                            };
+
+                            return HttpResponse::Ok().content_type(ContentType::json()).json(success_response);
                         },
                         Err(_) => {
                             let err_not_found = GenericError {
