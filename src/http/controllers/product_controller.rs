@@ -402,8 +402,8 @@ pub async fn restore(path: web::Path<u32>) -> impl Responder{
                 },
                 Err(_) => {
                     let err_not_found = GenericError {
-                        message: "Error updating product!",
-                        error: "Internal server error while updating product!"
+                        message: "Error restoring product!",
+                        error: "Internal server error while restoring product!"
                     };
 
                     return HttpResponse::InternalServerError().content_type(ContentType::json()).json(err_not_found);
@@ -413,7 +413,7 @@ pub async fn restore(path: web::Path<u32>) -> impl Responder{
 
         }, Err(_error) => {
             let err_not_found = GenericError {
-                message: "Error updating product!",
+                message: "Error restoring product!",
                 error: "Product was not found."
             };
 
