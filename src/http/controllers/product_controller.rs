@@ -289,7 +289,134 @@ async fn store(body: web::Json<ProductStoreRequest>) -> impl Responder {
     }
 }
 
-// Rotas de Produtos
+/// Endpoint para Excluir produto (Exclusão lógica)
+pub async fn delete(path: web::Path<u32>) -> impl Responder{
+    let id = path.into_inner();
+            
+    let conn = &mut get_connection().await.unwrap();
+    let product = products::table
+        .filter(products::id.eq(id as i32))
+        .select(Product::as_select())
+        .get_result::<Product>(conn)
+        .await;
+
+    match product {
+        Ok(product) => {
+            let mut product_to_restore = ProductDTO {
+                sku: product.sku,
+                name: product.name,
+                description: product.description,
+                price: product.price,
+                weight: product.weight,
+                dimension_height: product.dimension_height,
+                dimension_width: product.dimension_width,
+                dimension_depth: product.dimension_depth,
+                product_category_id: product.product_category_id,
+                created_at: product.created_at,
+                updated_at: product.updated_at,
+                deleted_at: product.deleted_at,
+            };
+
+            let time_now = Utc::now();
+
+            // Exclusão Lógica
+            product_to_restore.deleted_at = Some(time_now);
+
+            let restore_product = diesel::update(products::table.filter(products::id.eq(id as i32)))
+                .set(product_to_restore).get_result::<Product>(conn).await;
+
+            match restore_product {
+                Ok(product_restored) => {
+                    let success_restore_product = ProductUpdateResponse {
+                        message: "Product restored successfully!",
+                        product: product_restored
+                    };
+
+                    return HttpResponse::Ok().content_type(ContentType::json()).json(success_restore_product);
+                },
+                Err(_) => {
+                    let err_not_found = GenericError {
+                        message: "Error updating product!",
+                        error: "Internal server error while updating product!"
+                    };
+
+                    return HttpResponse::InternalServerError().content_type(ContentType::json()).json(err_not_found);
+                }
+            }
+
+
+        }, Err(_error) => {
+            let err_not_found = GenericError {
+                message: "Error updating product!",
+                error: "Product was not found."
+            };
+
+            return HttpResponse::NotFound().content_type(ContentType::json()).json(err_not_found);
+        }
+    }
+}
+
+/// Endpoint Restaurar produto excluido (Exclusão lógica)
+pub async fn restore(path: web::Path<u32>) -> impl Responder{
+    let id = path.into_inner();
+            
+    let conn = &mut get_connection().await.unwrap();
+    let product = products::table
+        .filter(products::id.eq(id as i32))
+        .select(Product::as_select())
+        .get_result::<Product>(conn)
+        .await;
+
+    match product {
+        Ok(product) => {
+            let mut new_product_updated = ProductDTO {
+                sku: product.sku,
+                name: product.name,
+                description: product.description,
+                price: product.price,
+                weight: product.weight,
+                dimension_height: product.dimension_height,
+                dimension_width: product.dimension_width,
+                dimension_depth: product.dimension_depth,
+                product_category_id: product.product_category_id,
+                created_at: product.created_at,
+                updated_at: product.updated_at,
+                deleted_at: product.deleted_at,
+            };
+
+            // Restaurar produto
+            new_product_updated.deleted_at = None;
+
+            let update_product = diesel::update(products::table.filter(products::id.eq(id as i32)))
+                .set(new_product_updated).get_result::<Product>(conn).await;
+
+            match update_product {
+                Ok(product_updated) => {
+                    return HttpResponse::Ok().content_type(ContentType::json()).json(product_updated);
+                },
+                Err(_) => {
+                    let err_not_found = GenericError {
+                        message: "Error updating product!",
+                        error: "Internal server error while updating product!"
+                    };
+
+                    return HttpResponse::InternalServerError().content_type(ContentType::json()).json(err_not_found);
+                }
+            }
+
+
+        }, Err(_error) => {
+            let err_not_found = GenericError {
+                message: "Error updating product!",
+                error: "Product was not found."
+            };
+
+            return HttpResponse::NotFound().content_type(ContentType::json()).json(err_not_found);
+        }
+    }
+}
+
+/// Rotas de Produtos
 pub fn config(cfg: &mut ServiceConfig) -> () {
     cfg.service(
     web::scope("/products")
