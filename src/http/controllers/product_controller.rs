@@ -23,7 +23,7 @@ pub async fn index(query_params: web::Query<ProductFilterRequest>) -> impl Respo
     }
 
     if let Some(sku_query) = query_params.0.sku {
-        query = query.filter(products::sku.eq(format!("%{}%", sku_query)));
+        query = query.filter(products::sku.eq(sku_query));
     }
 
     if let Some(description_query) = query_params.0.description {
