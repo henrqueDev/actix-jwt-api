@@ -193,7 +193,7 @@ pub async fn validate_token(req: HttpRequest) -> impl Responder {
 
 }
 
-// Endpoints do controller
+// Endpoints de autenticação
 pub fn config(cfg: &mut ServiceConfig) {
     cfg.service(web::scope("/auth")
         .route("/login", web::post().to(login))
