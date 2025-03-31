@@ -423,6 +423,8 @@ pub fn config(cfg: &mut ServiceConfig) -> () {
                 .route("/update/{id}", web::put().to(update))
                 .route("/store", web::post().to(store))
                 .route("/index", web::get().to(index))
+                .route("/delete/{id}", web::delete().to(delete))
+                .route("/restore/{id}", web::put().to(restore))
                 .wrap(from_fn(auth_middleware))
     );
 }
