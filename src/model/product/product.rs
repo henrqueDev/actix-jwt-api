@@ -1,10 +1,10 @@
 use chrono::{DateTime, Utc};
 use diesel::{prelude::{Associations, Identifiable, Insertable, Queryable}, Selectable};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use crate::{model::product_category::product_category::ProductCategory, schema::products};
 
 
-#[derive(Queryable, Identifiable, Serialize, Insertable, Selectable, Debug, Clone, Associations)]
+#[derive(Queryable, Identifiable, Serialize, Insertable, Deserialize, Selectable, Debug, Clone, Associations)]
 #[diesel(belongs_to(ProductCategory))]
 #[diesel(table_name = products)]
 pub struct Product {
