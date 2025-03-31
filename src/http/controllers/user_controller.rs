@@ -43,6 +43,9 @@ pub async fn index(query_params: web::Query<UserFilterRequest>) -> impl Responde
         query = query.limit(per_page as i64).offset(offset_num);
     }
 
+    // Apenas listar usuarios não excluidos
+    query = query.filter(users::deleted_at.is_null());
+
     // Consulta na tabela de users, retornando a struct UserDTOMin
     let results = query
         .select(UserDTOMin::as_select())
