@@ -4,6 +4,7 @@ use crate::schema::product_categories;
 
 #[derive(Queryable, Debug, Clone, Selectable, Identifiable)]
 #[diesel(table_name = product_categories)]
+#[diesel(treat_none_as_null = true)]
 pub struct ProductCategory {
     pub id: i32,
     pub name: String,

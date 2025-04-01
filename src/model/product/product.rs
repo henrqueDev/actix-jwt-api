@@ -7,6 +7,7 @@ use crate::{model::product_category::product_category::ProductCategory, schema::
 #[derive(Queryable, Identifiable, Serialize, Insertable, Deserialize, Selectable, Debug, Clone, Associations)]
 #[diesel(belongs_to(ProductCategory))]
 #[diesel(table_name = products)]
+#[diesel(treat_none_as_null = true)]
 pub struct Product {
     pub id: i32,
     pub sku: String,

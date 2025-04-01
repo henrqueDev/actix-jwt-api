@@ -8,7 +8,7 @@ use crate::{model::product_category::product_category::ProductCategory, schema::
 #[derive(Queryable, Insertable, Selectable, Serialize, Debug, Clone, Associations, AsChangeset)]
 #[diesel(belongs_to(ProductCategory))]
 #[diesel(table_name = products)]
-#[changeset_options(treat_none_as_null = "true")]
+#[diesel(treat_none_as_null = true)]
 pub struct ProductDTO {
     pub sku: String,
     pub name: String,

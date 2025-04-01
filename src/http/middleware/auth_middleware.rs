@@ -14,7 +14,7 @@ pub async fn auth_middleware(
     next: Next<impl MessageBody>,
 ) -> Result<ServiceResponse<impl MessageBody>, Error> {
 
-    if let Some(token) = req.headers().get("Authorization") {
+    if let Some(token) = req.headers().get("authorization") {
 
         match decode_jwt(token.to_str().expect("Error casting headervalue to &str")) {
             Ok(claim) => {
@@ -55,7 +55,7 @@ pub async fn auth_middleware(
     } else {
         let user_not_found_response = GenericError {
             message: "No user Logged!",
-            error: "Authorization Header not found."
+            error: "authorization Header not found."
         };
         let error = Err(user_not_found_response);
         return error.map_err(|e| actix_web::error::ErrorBadRequest(e))?;

@@ -152,7 +152,7 @@ pub async fn login(body: web::Json<AuthLoginRequest>) -> impl Responder {
 
 /// Endpoint que valida e retorna credenciais carregadas no token JWT passado no header da requisição
 pub async fn validate_token(req: HttpRequest) -> impl Responder {
-    let token = req.headers().get("Authorization").unwrap();
+    let token = req.headers().get("authorization").unwrap();
     match decode_jwt(token.to_str().expect("Error casting headervalue to &str")) {
         Ok(claim) => {
 

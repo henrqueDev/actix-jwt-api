@@ -313,7 +313,7 @@ pub async fn update(path: web::Path<i32>, body: web::Json<UserUpdateRequest>) ->
 
 /// Endpoint para usuários deletarem a conta (exclusão lógica)
 pub async fn delete_my_account(req: HttpRequest) -> impl Responder{
-    if let Some(token) = req.headers().get("Authorization") {
+    if let Some(token) = req.headers().get("authorization") {
 
         match decode_jwt(token.to_str().expect("Error casting headervalue to &str")) {
             Ok(claim) => {
@@ -400,7 +400,7 @@ pub async fn delete_my_account(req: HttpRequest) -> impl Responder{
 pub async fn enable_2fa(req: HttpRequest) -> impl Responder {
 
     // Pegar valor do token passado no header
-    let token = req.headers().get("Authorization").unwrap();
+    let token = req.headers().get("authorization").unwrap();
 
     match decode_jwt(token.to_str().expect("Error casting headervalue to &str")) {
         Ok(claim) => {
@@ -522,7 +522,7 @@ pub async fn enable_2fa(req: HttpRequest) -> impl Responder {
         Err(_err) => {
             let error_response = GenericError {
                 message: "No user Logged!",
-                error: "Invalid Authorization token."
+                error: "Invalid authorization token."
             };
 
             HttpResponse::Unauthorized()
@@ -544,7 +544,7 @@ pub async fn activate_2fa(req: HttpRequest, body: web::Json<UserActivate2FAReque
     match validate {
         Ok(_) => {
             // Pegar token do header na requisição
-            let token = req.headers().get("Authorization").unwrap();
+            let token = req.headers().get("authorization").unwrap();
 
             match decode_jwt(token.to_str().expect("Error casting headervalue to &str")) {
                 Ok(claim) => {
@@ -689,7 +689,7 @@ pub async fn activate_2fa(req: HttpRequest, body: web::Json<UserActivate2FAReque
                     // Caso o token for inválido
                     let error_response = GenericError {
                         message: "No user Logged!",
-                        error: "Invalid Authorization token."
+                        error: "Invalid authorization token."
                     };
         
                     return HttpResponse::Unauthorized()
