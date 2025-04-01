@@ -1,11 +1,8 @@
 use std::env;
 
 use actix_web::{get, App, HttpResponse, HttpServer, Responder};
-use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
-use actix_jwt_api::{database::db::get_connection_sync, http::controllers::{auth_controller, email_controller, product_controller, user_controller}};
+use actix_jwt_api::{database::db::run_pending_migrations_db, http::controllers::{auth_controller, email_controller, product_controller, user_controller}};
 use dotenvy_macro::dotenv;
-
-pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("./migrations");
 
 #[get("/")]
 async fn check_running() -> impl Responder {
@@ -15,11 +12,8 @@ async fn check_running() -> impl Responder {
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     env::set_var("RUST_BACKTRACE", "1");
-    let mut connection =  get_connection_sync().unwrap();
-    
-    connection
-        .run_pending_migrations(MIGRATIONS)
-        .expect("Error migrating pending requests");
+
+    run_pending_migrations_db();
 
     let app_addr = dotenv!("APP_ADDRESS");
     let app_port: u16 = dotenv!("APP_PORT")
