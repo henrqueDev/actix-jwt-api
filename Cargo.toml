@@ -4,21 +4,21 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-diesel = { version = "2.2.7", features = ["postgres", "chrono", "numeric"] }
-actix-web = "4"
+diesel = { version = "2.2.8", features = ["postgres", "chrono", "numeric"] }
+actix-web = "4.10.2"
 actix-multipart = "0.7.2"
 dotenv="0.15"
 dotenvy = "0.15"
 diesel_migrations = "2.2.0"
 diesel-async = { version = "0.5.2", features = ["postgres"] }
-serde = { version = "1.0.217", features = ["derive"] }
-chrono = { version = "0.4.39", features = ["serde"] }
+serde = { version = "1.0.219", features = ["derive"] }
+chrono = { version = "0.4.40", features = ["serde"] }
 bcrypt = "0.17.0"
 jsonwebtoken = "9.3.0"
-time = "0.3"
+time = "0.3.41"
 lazy_static = "1.5.0"
 dotenvy_macro = "0.15.7"
-lettre = "0.11.14"
+lettre = "0.11.15"
 lettre_email = "0.9.4"
 totp-rs = {version = "5.6.0", features = ["qr"] }
 rand = "0.9"
