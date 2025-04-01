@@ -32,3 +32,14 @@ Esse é um projeto simples de API com autenticação sem estado via Json Web Tok
   docker compose up --build -d
   ```
 - Testar os endpoints disponiveis com o Postman
+
+## Testes de Integração
+- Entrar na linha de comando do Container da API (actix_jwt_api por padrão)
+    ```shell
+    docker exec -it actix_jwt_api bash
+    ```
+
+- Rodar a suite de testes:
+    ```shell
+    cargo test _ -- test_env --show-output
+    ```
