@@ -24,23 +24,24 @@ RUN cargo build --release
 # Build your application
 
 # Start a new stage to create a smaller image without unnecessary build dependencies
-FROM debian:bookworm-slim
+# FROM debian:bookworm-slim
 
-# Install libpq for PostgreSQL connectivity
-RUN apt-get update && \
-    apt-get install -y libpq5 && \
-    apt-get install -y libssl3 && \
-    apt-get install -y ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
+# # Install libpq for PostgreSQL connectivity
+# RUN apt-get update && \
+#     apt-get install -y libpq5 && \
+#     apt-get install -y libssl3 && \
+#     apt-get install -y ca-certificates && \
+#     rm -rf /var/lib/apt/lists/*
 
 # Set the working directory
-WORKDIR /app
+#WORKDIR /app
 
 # Copy the built binary from the previous stage
-COPY --from=builder /app/target/release/${APP_NAME} ./
+
+#COPY --from=builder . ./
 
 EXPOSE 8080
 EXPOSE 587
 
 # Command to run the application
-CMD ["./${APP_NAME}"]
+CMD ["./target/release/${APP_NAME}"]

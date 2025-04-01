@@ -21,7 +21,7 @@ services:
     ports:
       - "587:587"
       - "${APP_PORT}:8080"
-    command: ["./${APP_NAME}"]
+    command: ["./target/release/${APP_NAME}"]
 
 volumes:
   postgres_data:
