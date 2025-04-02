@@ -3,7 +3,7 @@ use chrono::Utc;
 use diesel::{ExpressionMethods, QueryDsl, SelectableHelper, TextExpressionMethods};
 use diesel_async::RunQueryDsl;
 use validator::Validate;
-use crate::{database::db::get_connection, http::{middleware::auth_middleware::auth_middleware, requests::product::{product_filter_request::ProductFilterRequest, product_store_request::ProductStoreRequest, product_update_request::ProductUpdateRequest}, responses::product::product_update_response::ProductUpdateResponse, GenericError}, model::product::{product::Product, product_dto::ProductDTO}, schema::{product_categories, products}};
+use crate::{database::db::get_connection, http::{middleware::auth_middleware::auth_middleware, requests::product::{product_filter_request::ProductFilterRequest, product_store_request::ProductStoreRequest, product_update_request::ProductUpdateRequest}, responses::product::{product_store_response::{ProductStoreError, ProductStoreResponse}, product_update_response::ProductUpdateResponse}, GenericError}, model::product::{product::Product, product_dto::ProductDTO}, schema::{product_categories, products}};
 use crate::http::responses::product::product_index_response::ProductIndexResponse;
 
 /// Endpoint para consulta de products com filtros opcionais
@@ -266,10 +266,31 @@ async fn store(body: web::Json<ProductStoreRequest>) -> impl Responder {
                         .values(product_data)
                         .get_result::<Product>(conn)
                         .await;
+
+                    match store_product {
+                        Ok(product_stored) => {
+                            let res_success =  ProductStoreResponse {
+                                message: "Product stored successfully!",
+                                product: product_stored
+                            };
+                            
+                            return HttpResponse::Ok()
+                                .content_type(ContentType::json())
+                                .json(res_success);
+                        },
+                        Err(_) => {
+                            let res_conflict = ProductStoreError {
+                                message: "Error storing product!",
+                                error: "Product with same SKU already exists!"
+                            };
+
+                            return HttpResponse::Conflict()
+                                .content_type(ContentType::json())
+                                .json(res_conflict);
+                        }
+                    }
                 
-                    return HttpResponse::Ok()
-                        .content_type(ContentType::json())
-                        .json(store_product.unwrap());
+                    
                 },
                 Err(_err) => {
                     let err_not_found = GenericError {
