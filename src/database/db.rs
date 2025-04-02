@@ -8,24 +8,32 @@ use dotenvy_macro::dotenv;
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("./migrations");
 
 pub async fn get_connection() -> Result<AsyncPgConnection, ConnectionError> {
+    if dotenv!("APP_ENV") == "local" {
+        let env_test = env::args()
+            .into_iter()
+            .find(|x| *x == "test_env".to_owned());
+        
+        let url = match env_test {
+            Some(_env_test) => dotenv!("DATABASE_TEST_URL"),
+            None => dotenv!("DATABASE_URL")
+        };
 
-    let env_test = env::args()
-        .into_iter()
-        .find(|x| *x == "test_env".to_owned());
+        let mut connection = PgConnection::establish(url).unwrap();
 
-    let url = match env_test {
-        Some(_env_test) => dotenv!("DATABASE_TEST_URL"),
-        None => dotenv!("DATABASE_URL")
-    };
+        connection
+            .run_pending_migrations(MIGRATIONS)
+            .expect("Error migrating pending requests");
 
-    let mut connection = PgConnection::establish(url).unwrap();
-    
-    connection
-        .run_pending_migrations(MIGRATIONS)
-        .expect("Error migrating pending requests");
-    
-    return AsyncPgConnection::establish(url)
+        return AsyncPgConnection::establish(url)
         .await;
+    } else {
+        let url= dotenv!("DATABASE_URL");
+
+        return AsyncPgConnection::establish(url)
+        .await;
+    }
+    
+    
 }
 
 pub fn run_pending_migrations_db() -> PgConnection {
