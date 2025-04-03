@@ -17,8 +17,7 @@ pub async fn get_connection() -> Result<AsyncPgConnection, ConnectionError> {
             None => dotenv!("DATABASE_URL")
         };
 
-        return AsyncPgConnection::establish(url)
-        .await;
+        return AsyncPgConnection::establish(url).await;
     
 }
 
