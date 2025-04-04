@@ -9,7 +9,7 @@ CREATE TABLE products (
     dimension_height REAL NOT NULL,
     dimension_width REAL NOT NULL, -- Dimensões em metros
     dimension_depth REAL NOT NULL,
-    product_category_id INTEGER NOT NULL REFERENCES product_categories(id),
+    product_category_id INTEGER NOT NULL REFERENCES product_categories(id) ON DELETE CASCADE,
     created_at timestamp with time zone,
     updated_at timestamp with time zone,
     deleted_at timestamp with time zone
