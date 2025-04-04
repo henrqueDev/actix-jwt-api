@@ -14,3 +14,5 @@ CREATE TABLE products (
     updated_at timestamp with time zone,
     deleted_at timestamp with time zone
 );
+
+CREATE UNIQUE INDEX products_sku ON products(SKU);
