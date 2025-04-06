@@ -12,17 +12,17 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
   postgres-test:
-      image: postgres:latest
-      container_name: postgres_actix_db_test
-      restart: always
-      environment:
-        POSTGRES_USER: user
-        POSTGRES_PASSWORD: password
-        POSTGRES_DB: ${DB_TEST_NAME}
-      ports:
-        - "${DB_TEST_PORT}:5432"
-      volumes:
-        - postgres_test_data:/var/lib/postgresql_test/data
+    image: postgres:latest
+    container_name: postgres_actix_db_test
+    restart: always
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ${DB_TEST_NAME}
+    ports:
+      - "${DB_TEST_PORT}:5432"
+    volumes:
+      - postgres_test_data:/var/lib/postgresql_test/data
   app:
     build:
       dockerfile: Dockerfile
