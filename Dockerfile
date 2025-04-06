@@ -44,4 +44,4 @@ EXPOSE 8080
 EXPOSE 587
 
 # Command to run the application
-CMD ["./target/release/${APP_NAME}"]
+CMD ["./target/release/actix-jwt-api"]

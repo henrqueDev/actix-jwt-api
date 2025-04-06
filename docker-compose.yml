@@ -26,6 +26,7 @@ services:
   app:
     build:
       dockerfile: Dockerfile
+    image: henrquedev/actix-jwt-api-app:tests
     container_name: actix_jwt_api
     restart: always
     depends_on:
