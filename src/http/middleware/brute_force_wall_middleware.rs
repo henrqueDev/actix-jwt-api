@@ -9,6 +9,16 @@ lazy_static! {
     static ref REDIS_URL: String = {
         format!("redis://:{}@{}", dotenv!("REDIS_PASSWORD"), dotenv!("REDIS_ADDRESS"))
     };
+    
+    static ref MAX_REQUESTS_TRIES_ALLOWED: u32 = {
+        let max_reqs_str = dotenv!("MAX_REQUESTS_TRIES_ALLOWED");
+        let max_reqs_to_block: Result<u32, _> = max_reqs_str.parse();
+        
+        match max_reqs_to_block {
+            Ok(reqs) => reqs,
+            Err(_) => 15
+        }
+    };
 }
 
 use crate::http::GenericError;
@@ -26,7 +36,7 @@ pub async fn brute_force_wall_middleware(
     let ip_address = req.connection_info().peer_addr().unwrap().to_owned();
 
     if let Ok(times) = client.get::<&str, u32>(&ip_address).await {
-        if times >= 5 {
+        if times >= MAX_REQUESTS_TRIES_ALLOWED.to_owned() {
             let error_response = GenericError {
                 message: "Too many requests! Your IP its blocked for 5 hours!",
                 error: "Too many requests."

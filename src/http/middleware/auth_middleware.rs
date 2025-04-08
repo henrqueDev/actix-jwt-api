@@ -11,6 +11,26 @@ lazy_static! {
     static ref REDIS_URL: String = {
         format!("redis://:{}@{}", dotenv!("REDIS_PASSWORD"), dotenv!("REDIS_ADDRESS"))
     };
+
+    static ref TIME_BLOCK_IP: u64 = {
+        let time_str = dotenv!("TIME_BLOCK_IP");
+        let time_block: Result<u64, _> = time_str.parse();
+        
+        match time_block {
+            Ok(time) => time,
+            Err(_) => 18000
+        }
+    };
+
+    static ref MAX_REQUESTS_TRIES_ALLOWED: u32 = {
+        let max_reqs_str = dotenv!("MAX_REQUESTS_TRIES_ALLOWED");
+        let max_reqs_to_block: Result<u32, _> = max_reqs_str.parse();
+        
+        match max_reqs_to_block {
+            Ok(reqs) => reqs,
+            Err(_) => 15
+        }
+    };
 }
 
 use crate::{database::db::get_connection, http::GenericError, model::user::user::User, schema::users, services::auth::decode_jwt};
@@ -60,8 +80,13 @@ pub async fn auth_middleware(
 
                 match has_ip {
                     Ok(times) => {
-                        if times <= 5 {
-                            let _ = client.set_ex::<&str, u32, String>(&ip_address, times + 1, 18000).await.unwrap();
+                        if times <= MAX_REQUESTS_TRIES_ALLOWED.to_owned() {
+                            let _ = client.set_ex::<&str, u32, String>(
+                                &ip_address, 
+                                times + 1, 
+                                TIME_BLOCK_IP.to_owned())
+                                .await
+                                .unwrap();
                             let error_response = GenericError {
                                 message: "Unathorized user!",
                                 error: "Your Token do not match with our API!"
@@ -93,7 +118,7 @@ pub async fn auth_middleware(
                     
                                 let error = Err(error_response);
                                 
-                                client.set_ex::<&str, u32, String>(&ip_address, 1, 18000).await.unwrap();
+                                client.set_ex::<&str, u32, String>(&ip_address, 1, TIME_BLOCK_IP.to_owned()).await.unwrap();
                                 return error.map_err(|e| actix_web::error::ErrorUnauthorized(e))?;
                             }
                         }
