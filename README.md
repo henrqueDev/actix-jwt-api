@@ -43,3 +43,16 @@ Esse é um projeto simples de API com autenticação sem estado via Json Web Tok
     ```shell
     cargo test _ -- test_env --show-output
     ```
+
+## Notas sobre middleware de proteção contra Brute Force
+
+- A implementação da proteção é simples, prevenindo ataques de força bruta em:
+    - Credenciais de Usuários
+    - Códigos de One Timed Password (2FA)
+    - Chaves de codificação da API
+
+- Ao rodar a API com docker compose, a rede em modo bridge, ou até mesmo rodando em modo host, a aplicação não é capaz de filtrar os ip's das requisições HTTP corretamente.
+
+    - Uma alternativa para esse problema é retirar a API do docker-compose e rodar o binário diretamente no terminal (ou configurar para rodar como um serviço de sistema linux junto com o Supervisor)
+
+- Os IP's suspeitos de ataques de força bruta ficarão com os acessos à API bloqueados por 5 horas.
