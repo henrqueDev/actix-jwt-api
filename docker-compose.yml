@@ -1,4 +1,9 @@
 services:
+  redis:
+    image: redis:latest
+    command: redis-server --requirepass Redis2019!
+    ports:
+      - "6379:6379"
   postgres:
     image: postgres:latest
     container_name: postgres_actix_db
@@ -35,7 +40,9 @@ services:
       - "587:587"
       - "${APP_PORT}:8080"
     command: ["./target/release/${APP_NAME}"]
-
+    volumes:
+      - actix_api_data:/var/lib/actix_api/data
 volumes:
   postgres_data:
   postgres_test_data:
+  actix_api_data:
