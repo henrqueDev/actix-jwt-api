@@ -47,7 +47,7 @@ pub async fn auth_middleware(
                 
             },
             Err(_error) => {
-                let requisicao = req.connection_info().peer_addr().unwrap().to_owned();
+                let ip_address = req.connection_info().peer_addr().unwrap().to_owned();
     
                 let client = &mut redis::Client::open(REDIS_URL.to_owned())
                     .unwrap()
@@ -56,12 +56,12 @@ pub async fn auth_middleware(
                     .unwrap();
 
                 
-                let has_ip = client.get::<&str, u32>(&requisicao).await;
+                let has_ip = client.get::<&str, u32>(&ip_address).await;
 
                 match has_ip {
                     Ok(times) => {
                         if times <= 5 {
-                            let _ = client.set_ex::<&str, u32, String>(&requisicao, times + 1, 18000).await.unwrap();
+                            let _ = client.set_ex::<&str, u32, String>(&ip_address, times + 1, 18000).await.unwrap();
                             let error_response = GenericError {
                                 message: "Unathorized user!",
                                 error: "Your Token do not match with our API!"
@@ -100,7 +100,7 @@ pub async fn auth_middleware(
                     
                                 let error = Err(error_response);
                                 
-                                client.set_ex::<&str, u32, String>(&requisicao, 1, 18000).await.unwrap();
+                                client.set_ex::<&str, u32, String>(&ip_address, 1, 18000).await.unwrap();
                                 return error.map_err(|e| actix_web::error::ErrorUnauthorized(e))?;
                             }
                         }

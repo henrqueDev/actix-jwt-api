@@ -1,11 +1,11 @@
-use actix_web::{http::header::ContentType, web::{self, ServiceConfig}, HttpRequest, HttpResponse, Responder};
+use actix_web::{http::header::ContentType, middleware::from_fn, web::{self, ServiceConfig}, HttpRequest, HttpResponse, Responder};
 use chrono::Utc;
 use diesel::{ExpressionMethods, QueryDsl, SelectableHelper};
 use diesel_async::RunQueryDsl;
 use totp_rs::{Algorithm, Secret, TOTP};
 use dotenvy_macro::dotenv;
 use validator::Validate;
-use crate::{database::db::get_connection, http::{requests::auth::auth_login_request::AuthLoginRequest, responses::auth::auth_login_response::{AuthLoginError, AuthLoginResponse}, GenericError, GenericResponse}, model::user::user::User, schema::users, services::auth::{decode_jwt, encode_jwt}};
+use crate::{database::db::get_connection, http::{middleware::auth_middleware::auth_middleware, requests::auth::auth_login_request::AuthLoginRequest, responses::auth::auth_login_response::{AuthLoginError, AuthLoginResponse}, GenericError, GenericResponse}, model::user::user::User, schema::users, services::auth::{decode_jwt, encode_jwt}};
 
 /// Endpoint para o usuário efetuar o Login
 pub async fn login(body: web::Json<AuthLoginRequest>) -> impl Responder {
@@ -197,6 +197,9 @@ pub async fn validate_token(req: HttpRequest) -> impl Responder {
 pub fn config(cfg: &mut ServiceConfig) {
     cfg.service(web::scope("/auth")
         .route("/login", web::post().to(login))
-        .route("/validateToken", web::post().to(validate_token))
+        .service(web::scope("")
+            .route("/validateToken", web::post().to(validate_token))
+            .wrap(from_fn(auth_middleware))
+        )
     );
 }
