@@ -1,7 +1,7 @@
 use std::env;
 
-use actix_web::{get, App, HttpResponse, HttpServer, Responder};
-use actix_jwt_api::{database::db::run_pending_migrations_db, http::controllers::{auth_controller, email_controller, product_controller, user_controller}};
+use actix_web::{get, middleware::from_fn, App, HttpResponse, HttpServer, Responder};
+use actix_jwt_api::{database::db::run_pending_migrations_db, http::{controllers::{auth_controller, email_controller, product_controller, user_controller}, middleware::brute_force_wall_middleware::brute_force_wall_middleware}};
 use dotenvy_macro::dotenv;
 
 #[get("/")]
@@ -26,8 +26,9 @@ async fn main() -> std::io::Result<()> {
             .configure(user_controller::config)
             .configure(email_controller::config)
             .configure(auth_controller::config)
-            .configure(product_controller::config);
-        
+            .configure(product_controller::config)
+            .wrap(from_fn(brute_force_wall_middleware));
+            
         return app;
     })
     .workers(4)

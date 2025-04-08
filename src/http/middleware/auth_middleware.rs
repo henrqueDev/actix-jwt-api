@@ -22,6 +22,12 @@ pub async fn auth_middleware(
 
     if let Some(token) = req.headers().get("authorization") {
 
+        let client = &mut redis::Client::open(REDIS_URL.to_owned())
+                    .unwrap()
+                    .get_multiplexed_tokio_connection()
+                    .await
+                    .unwrap();
+
         match decode_jwt(token.to_str().expect("Error casting headervalue to &str")) {
             Ok(claim) => {
                 let conn = &mut get_connection().await.unwrap();
@@ -48,12 +54,6 @@ pub async fn auth_middleware(
             },
             Err(_error) => {
                 let ip_address = req.connection_info().peer_addr().unwrap().to_owned();
-    
-                let client = &mut redis::Client::open(REDIS_URL.to_owned())
-                    .unwrap()
-                    .get_multiplexed_tokio_connection()
-                    .await
-                    .unwrap();
 
                 
                 let has_ip = client.get::<&str, u32>(&ip_address).await;
@@ -70,14 +70,7 @@ pub async fn auth_middleware(
                             let error = Err(error_response);
                             return error.map_err(|e| actix_web::error::ErrorUnauthorized(e))?;
                         } else {
-                            let error_response = GenericError {
-                                message: "Too many requests!",
-                                error: "Some error raised on server side!"
-                            };
-                
-                            let error = Err(error_response);
-                            
-                            return error.map_err(|e| actix_web::error::ErrorTooManyRequests(e))?;
+                            return next.call(req).await;
                         }
                     },
                     Err(redis_error) => {
