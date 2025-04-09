@@ -3,15 +3,20 @@ use base32::{encode, Alphabet};
 use chrono::Utc;
 use diesel::{ ExpressionMethods, QueryDsl, SelectableHelper, TextExpressionMethods };
 use diesel_async::RunQueryDsl;
+use lazy_static::lazy_static;
 use lettre::{message::{header, SinglePart}, transport::smtp::authentication::{Credentials, Mechanism}, Message, SmtpTransport, Transport};
 use totp_rs::{Algorithm, Secret, TOTP};
 use uuid::{ContextV7, Timestamp, Uuid};
 use validator::Validate;
-use crate::{database::db::get_connection, http::{middleware::auth_middleware::auth_middleware, requests::user::{user_activate2fa_request::UserActivate2FARequest, user_filter_request::UserFilterRequest, user_store_request::UserStoreRequest, user_update_request::UserUpdateRequest}, responses::{auth::auth_login_response::AuthLoginError, email::email_sent_response::EmailSendError, user::{user_delete_response::{UserDeleteError, UserDeleteResponse}, user_enable2fa_response::UserEnable2FAResponse, user_index_response::UserIndexResponse, user_store_response::{UserStoreError, UserStoreResponse}, user_update_response::{UserUpdateError, UserUpdateResponse}}}, GenericError, GenericResponse}, model::user::{user::User, user_dto::{UserDTO, UserDTOMin}}, schema::users::{self}, services::{auth::decode_jwt, redis_client::get_key}};
+use crate::{database::db::get_connection, http::{middleware::auth_middleware::auth_middleware, requests::user::{user_activate2fa_request::UserActivate2FARequest, user_activate_request::UserActivateRequest, user_filter_request::UserFilterRequest, user_store_request::UserStoreRequest, user_update_request::UserUpdateRequest}, responses::{auth::auth_login_response::AuthLoginError, email::email_sent_response::EmailSendError, user::{user_delete_response::{UserDeleteError, UserDeleteResponse}, user_enable2fa_response::UserEnable2FAResponse, user_index_response::UserIndexResponse, user_store_response::{UserStoreError, UserStoreResponse}, user_update_response::{UserUpdateError, UserUpdateResponse}}}, GenericError, GenericResponse}, model::user::{user::User, user_dto::{UserDTO, UserDTOMin}}, schema::users::{self}, services::{auth::decode_jwt, redis_client::{cache_get_key, cache_set_key}}};
 use crate::schema::users::dsl::*;
 use base64::{prelude::BASE64_STANDARD_NO_PAD, Engine};
 use rand::Rng;
 use dotenvy_macro::dotenv;
+
+lazy_static! {
+    static ref BCRYPT_COST: u32 = dotenv!("BCRYPT_COST").parse().unwrap();
+}
 
 /// Endpoint para consulta de usuários com filtros opcionais
 pub async fn index(query_params: web::Query<UserFilterRequest>) -> impl Responder {
@@ -138,6 +143,12 @@ pub async fn store(body: web::Json<UserStoreRequest>) -> impl Responder {
                     let uuid_user = Uuid::new_v7(
                         Timestamp::from_unix(&context,time_unix.0, time_unix.1)
                     );
+
+                    let _ = cache_set_key::<&str, String, ()>(
+                        &format!("user:{}:uuid_user_activate", &user_created.id),
+                        uuid_user.to_string(),
+                        86400
+                    ).await;
 
                     let message_email = format!("This is your Token for define your password {}", uuid_user.to_string());
 
@@ -456,8 +467,91 @@ pub async fn delete_my_account(req: HttpRequest) -> impl Responder{
     }
 }
 
-pub async fn activate_user() {
-    todo!();
+pub async fn activate_user(
+    req: HttpRequest, 
+    path: web::Path<String>, 
+    body: web::Json<UserActivateRequest>
+) -> impl Responder {
+    let validate = body.validate();
+    
+    match validate {
+        Ok(_) => {
+            let data = body.into_inner();
+            let auth_token = req
+                .headers()
+                .get("authorization").unwrap();
+        
+            match decode_jwt(auth_token.to_str().expect("Error casting header value to &str!")) {
+                Ok(claims) => {
+                    let conn = &mut get_connection().await.unwrap();
+                    let email_user = claims.sub;
+        
+                    let mut found_user = users::table
+                        .filter(users::email.eq(email_user))
+                        .select(User::as_select())
+                        .get_result::<User>(conn)
+                        .await
+                        .expect("User not found! Query failed!");
+
+                    let key_value = format!("user:{}:uuid_user_activate", found_user.id);
+
+                    let uuid = path.into_inner();
+                    let key_exists = cache_get_key::<&str, String>(&key_value).await;
+
+                    if uuid.eq(&key_exists) {
+                        let new_password_hashed = match bcrypt::hash(&data.new_password, BCRYPT_COST.to_owned()) {
+                            Ok(password_data) => password_data,
+                            Err(_err) => panic!("Error while bcrypt password")
+                        };
+                            
+                        found_user.password = Some(new_password_hashed);
+                        found_user.updated_at = Some(Utc::now());
+    
+                        let update_user_password = diesel::update(users::table
+                            .filter(users::id.eq(found_user.id))
+                            ).set(found_user)
+                            .get_result::<User>(conn)
+                            .await
+                            .expect("Error updating user!");
+    
+                        let updated_user_response = UserUpdateResponse {
+                            message: "User updated",
+                            user: update_user_password
+                        };
+                        
+                        return HttpResponse::Ok()
+                            .content_type(ContentType::json())
+                            .json(updated_user_response);
+                    } else {
+                        let uuid_not_exists_err = UserUpdateError {
+                            message: "Bad Request while activating user!",
+                            error: "UUID do not exists."
+                        };
+
+                        return HttpResponse::BadRequest().content_type(ContentType::json()).json(uuid_not_exists_err);
+                    }
+        
+                    
+                },
+                Err(error) => {
+                    let internal_err = UserUpdateError {
+                        message: "Internal server error activating user!",
+                        error: &error.to_string()
+                    };
+
+                    return HttpResponse::InternalServerError()
+                        .content_type(ContentType::json())
+                        .json(internal_err);
+                }
+            }
+        
+        
+        },
+        Err(error) => {
+            return HttpResponse::BadRequest().content_type(ContentType::json()).json(error);
+        }
+    }
+
 }
 
 /// Endpoint para solicitar ativação da Autenticação de dois fatores
@@ -780,6 +874,7 @@ web::scope("/users")
                 .route("/enable-2fa", web::get().to(enable_2fa))
                 .route("/activate-2fa", web::post().to(activate_2fa))
                 .route("/store", web::post().to(store))
+                .route("/activate-user/{id}", web::put().to(activate_user))
                 .wrap(from_fn(auth_middleware))
             )
     );
