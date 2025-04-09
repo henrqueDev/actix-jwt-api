@@ -36,7 +36,7 @@ diesel::table! {
         id -> Int4,
         name -> Varchar,
         email -> Varchar,
-        password -> Varchar,
+        password -> Nullable<Varchar>,
         two_factor_secret -> Nullable<Text>,
         two_factor_recovery_code -> Nullable<Text>,
         two_factor_confirmed_at -> Nullable<Timestamptz>,

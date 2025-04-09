@@ -3,9 +3,11 @@ use base32::{encode, Alphabet};
 use chrono::Utc;
 use diesel::{ ExpressionMethods, QueryDsl, SelectableHelper, TextExpressionMethods };
 use diesel_async::RunQueryDsl;
+use lettre::{message::{header, SinglePart}, transport::smtp::authentication::{Credentials, Mechanism}, Message, SmtpTransport, Transport};
 use totp_rs::{Algorithm, Secret, TOTP};
+use uuid::{ContextV7, Timestamp, Uuid};
 use validator::Validate;
-use crate::{database::db::get_connection, http::{middleware::auth_middleware::auth_middleware, requests::user::{user_activate2fa_request::UserActivate2FARequest, user_filter_request::UserFilterRequest, user_store_request::UserStoreRequest, user_update_request::UserUpdateRequest}, responses::{auth::auth_login_response::AuthLoginError, user::{user_delete_response::{UserDeleteError, UserDeleteResponse}, user_enable2fa_response::UserEnable2FAResponse, user_index_response::UserIndexResponse, user_store_response::{UserStoreError, UserStoreResponse}, user_update_response::{UserUpdateError, UserUpdateResponse}}}, GenericError, GenericResponse}, model::user::{user::User, user_dto::{UserDTO, UserDTOMin}}, schema::users::{self}, services::auth::decode_jwt};
+use crate::{database::db::get_connection, http::{middleware::auth_middleware::auth_middleware, requests::user::{user_activate2fa_request::UserActivate2FARequest, user_filter_request::UserFilterRequest, user_store_request::UserStoreRequest, user_update_request::UserUpdateRequest}, responses::{auth::auth_login_response::AuthLoginError, email::email_sent_response::EmailSendError, user::{user_delete_response::{UserDeleteError, UserDeleteResponse}, user_enable2fa_response::UserEnable2FAResponse, user_index_response::UserIndexResponse, user_store_response::{UserStoreError, UserStoreResponse}, user_update_response::{UserUpdateError, UserUpdateResponse}}}, GenericError, GenericResponse}, model::user::{user::User, user_dto::{UserDTO, UserDTOMin}}, schema::users::{self}, services::{auth::decode_jwt, redis_client::get_key}};
 use crate::schema::users::dsl::*;
 use base64::{prelude::BASE64_STANDARD_NO_PAD, Engine};
 use rand::Rng;
@@ -90,13 +92,13 @@ pub async fn store(body: web::Json<UserStoreRequest>) -> impl Responder {
     
     match validate {
         Ok(_) => {
-            let mut data = body.into_inner();
+            let data = body.into_inner();
     
             // Gerar hash da senha passada no body
-            data.password = match bcrypt::hash(&data.password, 10) {
-                Ok(password_data) => password_data,
-                Err(_err) => panic!("Error while bcrypt password")
-            };
+            // data.password = match bcrypt::hash(&data.password, 10) {
+            //     Ok(password_data) => password_data,
+            //     Err(_err) => panic!("Error while bcrypt password")
+            // };
         
             // Pegar a hora atual
             let date_now = Utc::now();
@@ -104,7 +106,7 @@ pub async fn store(body: web::Json<UserStoreRequest>) -> impl Responder {
             let new_user = UserDTO{
                 name: data.name, 
                 email: data.email.clone(),
-                password: data.password,
+                password: None,
                 two_factor_secret: None,
                 two_factor_recovery_code: None,
                 two_factor_confirmed_at: None,
@@ -127,13 +129,57 @@ pub async fn store(body: web::Json<UserStoreRequest>) -> impl Responder {
                     // Preparar dados da resposta
                     let response = UserStoreResponse{
                         message: "User stored successfuly!",
-                        user: user_created
+                        user: user_created.clone()
                     };
-        
-                    // Resposta com status 200
-                    return HttpResponse::Ok()
-                        .content_type(ContentType::json())
-                        .json(response);
+
+                    let context = ContextV7::new();
+                    let time_unix = Timestamp::now(&context).to_unix();
+
+                    let uuid_user = Uuid::new_v7(
+                        Timestamp::from_unix(&context,time_unix.0, time_unix.1)
+                    );
+
+                    let message_email = format!("This is your Token for define your password {}", uuid_user.to_string());
+
+                    let email_text_body = SinglePart::builder()
+                        .header(header::ContentType::TEXT_PLAIN)
+                        .body(message_email);
+
+                    // Ler dados do usuário da aplicação (.env) e de quem vai receber o email
+                    let google_email = dotenv!("EMAIL");
+                    let user_receiver = user_created.email;
+                    let google_token = dotenv!("GOOGLE_TOKEN");
+                    
+                    // Criar o Email
+                    let email_singlepart = Message::builder()
+                        .from(google_email.parse().unwrap())
+                        .to(user_receiver.parse().unwrap())
+                        .subject("Ativar conta Logistica-APP")
+                        .singlepart(email_text_body).unwrap();
+
+                    // Resgatar as credenciais para conexão segura
+                    let creds = Credentials::new(google_email.to_owned(), google_token.to_owned());
+
+                    // Construtor do algoritmo de transporte pelo serviço do Gmail
+                    let mailer = SmtpTransport::starttls_relay("smtp.gmail.com").expect("Error creating StartTLS Transport")
+                        .authentication(vec![Mechanism::Plain])
+                        .credentials(creds)
+                        .build();
+
+                    // Enviar email e verificar se o envio deu certo
+                    match mailer.send(&email_singlepart) { // Resposta com status 200
+                        Ok(_) => return HttpResponse::Ok()
+                            .content_type(ContentType::json())
+                            .json(response),
+                        Err(e) => HttpResponse::BadGateway()
+                            .content_type(ContentType::json())
+                            .json(EmailSendError {
+                                message: "Error sending email!",
+                                error: &e.to_string()
+                            }),
+                    }
+                    
+                    
                 },
                 Err(error) => {
                     let error_msg = error.to_string();
@@ -194,46 +240,60 @@ pub async fn update(path: web::Path<i32>, body: web::Json<UserUpdateRequest>) ->
                     // Verificar se o usuario quer atualizar a senha atual
                     match &body.old_password {
                         Some(old_password) => {
+                            match &user_found.password {
+                                Some(user_password) => {
+                                    // Verificar se a senha corresponde com a que está no banco
+                                    match bcrypt::verify(old_password, user_password) {
+                                        Ok(result) => {
+                    
+                                            if result == true {
+                    
+                                                let new_password = match bcrypt::hash(body.new_password.clone().unwrap(), 10){
+                                                    Ok(password_data) => password_data,
+                                                    Err(_err) => panic!("Error while encrypt new password") // Revisar
+                                                };
+                    
+                                                new_updated_user.password = Some(new_password);
+                                        
+                                            } else {
+                                                let res_wrong_pass = UserUpdateError {
+                                                    message: "Password confirmation gone wrong!",
+                                                    error: "Old password is wrong! Try again."
+                                                };
 
-                            // Verificar se a senha corresponde com a que está no banco
-                            match bcrypt::verify(old_password, &user_found.password) {
-                                Ok(result) => {
-            
-                                    if result == true {
-            
-                                        let new_password = match bcrypt::hash(body.new_password.clone().unwrap(), 10){
-                                            Ok(password_data) => password_data,
-                                            Err(_err) => panic!("Error while encrypt new password") // Revisar
-                                        };
-            
-                                        new_updated_user.password = new_password;
-                                
-                                    } else {
-                                        let res_wrong_pass = UserUpdateError {
-                                            message: "Password confirmation gone wrong!",
-                                            error: "Old password is wrong! Try again."
-                                        };
+                                                return HttpResponse::Unauthorized()
+                                                    .content_type(ContentType::json())
+                                                    .json(res_wrong_pass);
+                                            }
+                                        },
+                                        
+                                        //Em caso de erro interno no processo de validação da senha antiga
+                                        Err(err) => {
+                                            
+                                            let res_bcrypt_err = UserUpdateError {
+                                                message: "Server wasnt able to parse old Password to confirm!",
+                                                error: &err.to_string()
+                                            };
 
-                                        return HttpResponse::Unauthorized()
-                                            .content_type(ContentType::json())
-                                            .json(res_wrong_pass);
-                                    }
-                                },
-                                
-                                //Em caso de erro interno no processo de validação da senha antiga
-                                Err(err) => {
-                                    
-                                    let res_bcrypt_err = UserUpdateError {
-                                        message: "Server wasnt able to parse old Password to confirm!",
-                                        error: &err.to_string()
+                                            // Retornar resposta com status 500
+                                            return HttpResponse::InternalServerError()
+                                                .content_type(ContentType::json())
+                                                .json(res_bcrypt_err);
+                                        }
                                     };
-
-                                    // Retornar resposta com status 500
-                                    return HttpResponse::InternalServerError()
-                                        .content_type(ContentType::json())
-                                        .json(res_bcrypt_err);
+                                },
+                                None => {
+                                    let res_err = UserUpdateError {
+                                        message: "You hasn't set your user password yet!",
+                                        error: "Error trying update user!"
+                                    };
+        
+                                    return HttpResponse::Conflict()
+                                    .content_type(ContentType::json())
+                                    .json(res_err);
                                 }
-                            };
+                            }
+                            
                         },
                         None => {}, // Se não tiver o campo old_password, não faz nada
                     }
@@ -394,6 +454,10 @@ pub async fn delete_my_account(req: HttpRequest) -> impl Responder{
             .content_type(ContentType::json())
             .json(error_json);
     }
+}
+
+pub async fn activate_user() {
+    todo!();
 }
 
 /// Endpoint para solicitar ativação da Autenticação de dois fatores
@@ -709,13 +773,13 @@ pub async fn activate_2fa(req: HttpRequest, body: web::Json<UserActivate2FAReque
 pub fn config(cfg: &mut ServiceConfig) {
     cfg.service(
 web::scope("/users")
-            .route("/store", web::post().to(store))
             .service(web::scope("")
                 .route("/deleteMyAccount",web::delete().to(delete_my_account))
                 .route("/update/{id}", web::put().to(update))
                 .route("/index", web::get().to(index))
                 .route("/enable-2fa", web::get().to(enable_2fa))
                 .route("/activate-2fa", web::post().to(activate_2fa))
+                .route("/store", web::post().to(store))
                 .wrap(from_fn(auth_middleware))
             )
     );
