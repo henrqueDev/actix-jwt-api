@@ -9,7 +9,7 @@ use crate::schema::users;
 pub struct UserDTO {
     pub name: String,
     pub email: String,
-    pub password: String,
+    pub password: Option<String>,
     pub two_factor_secret: Option<String>,
     pub two_factor_recovery_code: Option<String>,
     pub two_factor_confirmed_at: Option<DateTime<Utc>>,

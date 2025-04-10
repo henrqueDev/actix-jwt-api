@@ -3,7 +3,7 @@ CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     name VARCHAR NOT NULL,
     email VARCHAR NOT NULL UNIQUE,
-    password VARCHAR NOT NULL,
+    password VARCHAR,
     two_factor_secret TEXT,
     two_factor_recovery_code TEXT,
     two_factor_confirmed_at timestamp with time zone,

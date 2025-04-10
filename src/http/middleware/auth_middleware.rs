@@ -42,11 +42,6 @@ pub async fn auth_middleware(
 
     if let Some(token) = req.headers().get("authorization") {
 
-        let client = &mut redis::Client::open(REDIS_URL.to_owned())
-                    .unwrap()
-                    .get_multiplexed_tokio_connection()
-                    .await
-                    .unwrap();
 
         match decode_jwt(token.to_str().expect("Error casting headervalue to &str")) {
             Ok(claim) => {
@@ -75,6 +70,11 @@ pub async fn auth_middleware(
             Err(_error) => {
                 let ip_address = req.connection_info().peer_addr().unwrap().to_owned();
 
+                let client = &mut redis::Client::open(REDIS_URL.to_owned())
+                    .unwrap()
+                    .get_multiplexed_tokio_connection()
+                    .await
+                    .unwrap();
                 
                 let has_ip = client.get::<&str, u32>(&ip_address).await;
 
