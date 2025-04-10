@@ -2,13 +2,13 @@ use actix_web::{ http::header::ContentType, middleware::from_fn, web::{self, Ser
 use base32::{encode, Alphabet};
 use chrono::Utc;
 use diesel::{ ExpressionMethods, QueryDsl, SelectableHelper, TextExpressionMethods };
-use diesel_async::RunQueryDsl;
+use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection, RunQueryDsl};
 use lazy_static::lazy_static;
 use lettre::{message::{header, SinglePart}, transport::smtp::authentication::{Credentials, Mechanism}, Message, SmtpTransport, Transport};
 use totp_rs::{Algorithm, Secret, TOTP};
 use uuid::{ContextV7, Timestamp, Uuid};
 use validator::Validate;
-use crate::{database::db::get_connection, http::{middleware::auth_middleware::auth_middleware, requests::user::{user_activate2fa_request::UserActivate2FARequest, user_activate_request::UserActivateRequest, user_filter_request::UserFilterRequest, user_store_request::UserStoreRequest, user_update_request::UserUpdateRequest}, responses::{auth::auth_login_response::AuthLoginError, email::email_sent_response::EmailSendError, user::{user_delete_response::{UserDeleteError, UserDeleteResponse}, user_enable2fa_response::UserEnable2FAResponse, user_index_response::UserIndexResponse, user_store_response::{UserStoreError, UserStoreResponse}, user_update_response::{UserUpdateError, UserUpdateResponse}}}, GenericError, GenericResponse}, model::user::{user::User, user_dto::{UserDTO, UserDTOMin}}, schema::users::{self}, services::{auth::decode_jwt, redis_client::{cache_get_key, cache_set_key}}};
+use crate::{database::db::get_connection, http::{middleware::auth_middleware::auth_middleware, requests::user::{user_activate2fa_request::UserActivate2FARequest, user_activate_request::UserActivateRequest, user_filter_request::UserFilterRequest, user_store_request::UserStoreRequest, user_update_request::UserUpdateRequest, user_resend_activation_hash_request::UserResendActivationHashRequest}, responses::{auth::auth_login_response::AuthLoginError, email::email_sent_response::EmailSendError, user::{user_delete_response::{UserDeleteError, UserDeleteResponse}, user_enable2fa_response::UserEnable2FAResponse, user_index_response::UserIndexResponse, user_store_response::{UserStoreError, UserStoreResponse}, user_update_response::{UserUpdateError, UserUpdateResponse}}}, GenericError, GenericResponse}, model::user::{user::User, user_dto::{UserDTO, UserDTOMin}}, schema::users::{self}, services::{auth::decode_jwt, redis_client::{cache_del_key, cache_get_key, cache_set_key}}};
 use crate::schema::users::dsl::*;
 use base64::{prelude::BASE64_STANDARD_NO_PAD, Engine};
 use rand::Rng;
@@ -121,90 +121,127 @@ pub async fn store(body: web::Json<UserStoreRequest>) -> impl Responder {
             };
         
             let conn = &mut get_connection().await.unwrap();
-            
-            // Query para criar o usuário
-            let create_user = diesel::insert_into(users::table)
-                .values(&new_user)
+
+            let check_user_already_exists = users::table
+                .filter(users::email.eq(&new_user.email))
+                .select(User::as_select())
                 .get_result::<User>(conn)
                 .await;
-        
-            match create_user {
-                Ok(user_created) => {
-        
-                    // Preparar dados da resposta
-                    let response = UserStoreResponse{
-                        message: "User stored successfuly!",
-                        user: user_created.clone()
+
+            match check_user_already_exists {
+                Ok(_user) => {
+                    let user_exists_res = UserStoreError {
+                        message: "Email already being used!",
+                        error: "A user with this same email already exists."
                     };
 
-                    let context = ContextV7::new();
-                    let time_unix = Timestamp::now(&context).to_unix();
-
-                    let uuid_user = Uuid::new_v7(
-                        Timestamp::from_unix(&context,time_unix.0, time_unix.1)
-                    );
-
-                    let _ = cache_set_key::<&str, String, ()>(
-                        &format!("user:{}:uuid_user_activate", &user_created.id),
-                        uuid_user.to_string(),
-                        86400
-                    ).await;
-
-                    let message_email = format!("This is your Token for define your password {}", uuid_user.to_string());
-
-                    let email_text_body = SinglePart::builder()
-                        .header(header::ContentType::TEXT_PLAIN)
-                        .body(message_email);
-
-                    // Ler dados do usuário da aplicação (.env) e de quem vai receber o email
-                    let google_email = dotenv!("EMAIL");
-                    let user_receiver = user_created.email;
-                    let google_token = dotenv!("GOOGLE_TOKEN");
-                    
-                    // Criar o Email
-                    let email_singlepart = Message::builder()
-                        .from(google_email.parse().unwrap())
-                        .to(user_receiver.parse().unwrap())
-                        .subject("Ativar conta Logistica-APP")
-                        .singlepart(email_text_body).unwrap();
-
-                    // Resgatar as credenciais para conexão segura
-                    let creds = Credentials::new(google_email.to_owned(), google_token.to_owned());
-
-                    // Construtor do algoritmo de transporte pelo serviço do Gmail
-                    let mailer = SmtpTransport::starttls_relay("smtp.gmail.com").expect("Error creating StartTLS Transport")
-                        .authentication(vec![Mechanism::Plain])
-                        .credentials(creds)
-                        .build();
-
-                    // Enviar email e verificar se o envio deu certo
-                    match mailer.send(&email_singlepart) { // Resposta com status 200
-                        Ok(_) => return HttpResponse::Ok()
-                            .content_type(ContentType::json())
-                            .json(response),
-                        Err(e) => HttpResponse::BadGateway()
-                            .content_type(ContentType::json())
-                            .json(EmailSendError {
-                                message: "Error sending email!",
-                                error: &e.to_string()
-                            }),
-                    }
-                    
-                    
-                },
-                Err(error) => {
-                    let error_msg = error.to_string();
-        
-                    // Preparar dados do erro interno para a resposta
-                    let response = UserStoreError{
-                        message: "Error while trying store User!",
-                        error: &error_msg
-                    };
-                    
-                    // Retornar dados com status 500
-                    return HttpResponse::InternalServerError()
+                    return HttpResponse::Conflict()
                         .content_type(ContentType::json())
-                        .json(response);
+                        .json(user_exists_res);
+                },
+                Err(_) => {
+                    
+                    // Query para criar o usuário
+                    let create_user = diesel::insert_into(users::table)
+                    .values(&new_user)
+                    .get_result::<User>(conn)
+                    .await;
+
+                    match create_user {
+                        Ok(user_created) => {
+                
+                            // Preparar dados da resposta
+                            let response = UserStoreResponse{
+                                message: "User stored successfuly!",
+                                user: user_created.clone()
+                            };
+        
+                            let context = ContextV7::new();
+                            let time_unix = Timestamp::now(&context).to_unix();
+        
+                            let uuid_user = Uuid::new_v7(
+                                Timestamp::from_unix(&context,time_unix.0, time_unix.1)
+                            );
+        
+                            let cache_uuid = cache_set_key::<&str, String, ()>(
+                                &format!("user:{}:uuid_user_activate", &user_created.id),
+                                uuid_user.to_string(),
+                                86400
+                            ).await;
+        
+                            match cache_uuid {
+                                Ok(_) => {
+                                    let message_email = format!("This is your Token for define your password {}", uuid_user.to_string());
+        
+                                    let email_text_body = SinglePart::builder()
+                                        .header(header::ContentType::TEXT_PLAIN)
+                                        .body(message_email);
+                
+                                    // Ler dados do usuário da aplicação (.env) e de quem vai receber o email
+                                    let google_email = dotenv!("EMAIL");
+                                    let user_receiver = user_created.email;
+                                    let google_token = dotenv!("GOOGLE_TOKEN");
+                                    
+                                    // Criar o Email
+                                    let email_singlepart = Message::builder()
+                                        .from(google_email.parse().unwrap())
+                                        .to(user_receiver.parse().unwrap())
+                                        .subject("Ativar conta Logistica-APP")
+                                        .singlepart(email_text_body).unwrap();
+                
+                                    // Resgatar as credenciais para conexão segura
+                                    let creds = Credentials::new(google_email.to_owned(), google_token.to_owned());
+                
+                                    // Construtor do algoritmo de transporte pelo serviço do Gmail
+                                    let mailer = SmtpTransport::starttls_relay("smtp.gmail.com").expect("Error creating StartTLS Transport")
+                                        .authentication(vec![Mechanism::Plain])
+                                        .credentials(creds)
+                                        .build();
+                
+                                    // Enviar email e verificar se o envio deu certo
+                                    match mailer.send(&email_singlepart) { // Resposta com status 200
+                                        Ok(_) => return HttpResponse::Ok()
+                                            .content_type(ContentType::json())
+                                            .json(response),
+                                        Err(e) => HttpResponse::BadGateway()
+                                            .content_type(ContentType::json())
+                                            .json(EmailSendError {
+                                                message: "Error sending email!",
+                                                error: &e.to_string()
+                                            }),
+                                    }
+                                },
+                                Err(error) => {
+                                    let error_msg = error.to_string();
+        
+                                    // Preparar dados do erro interno para a resposta
+                                    let response = GenericError {
+                                        message: "Error while setting uuid key in cache!",
+                                        error: &error_msg
+                                    };
+                                    
+                                    // Retornar dados com status 500
+                                    return HttpResponse::InternalServerError()
+                                        .content_type(ContentType::json())
+                                        .json(response);
+                                }
+                            }
+                        },
+                        Err(error) => {
+                            let error_msg = error.to_string();
+                
+                            // Preparar dados do erro interno para a resposta
+                            let response = UserStoreError{
+                                message: "Error while trying store User!",
+                                error: &error_msg
+                            };
+                            
+                            // Retornar dados com status 500
+                            return HttpResponse::InternalServerError()
+                                .content_type(ContentType::json())
+                                .json(response);
+                        }
+                    }
                 }
             }
         },
@@ -468,7 +505,6 @@ pub async fn delete_my_account(req: HttpRequest) -> impl Responder{
 }
 
 pub async fn activate_user(
-    req: HttpRequest, 
     path: web::Path<String>, 
     body: web::Json<UserActivateRequest>
 ) -> impl Responder {
@@ -476,82 +512,188 @@ pub async fn activate_user(
     
     match validate {
         Ok(_) => {
-            let data = body.into_inner();
-            let auth_token = req
-                .headers()
-                .get("authorization").unwrap();
-        
-            match decode_jwt(auth_token.to_str().expect("Error casting header value to &str!")) {
-                Ok(claims) => {
-                    let conn = &mut get_connection().await.unwrap();
-                    let email_user = claims.sub;
-        
-                    let mut found_user = users::table
-                        .filter(users::email.eq(email_user))
-                        .select(User::as_select())
-                        .get_result::<User>(conn)
-                        .await
-                        .expect("User not found! Query failed!");
 
-                    let key_value = format!("user:{}:uuid_user_activate", found_user.id);
+                let data = body.into_inner();
+                let conn = &mut get_connection().await.unwrap();
+                let email_user = data.email;
 
-                    let uuid = path.into_inner();
-                    let key_exists = cache_get_key::<&str, String>(&key_value).await;
+                let mut found_user = users::table
+                    .filter(users::email.eq(email_user))
+                    .select(User::as_select())
+                    .get_result::<User>(conn)
+                    .await
+                    .expect("User not found! Query failed!");
 
-                    if uuid.eq(&key_exists) {
-                        let new_password_hashed = match bcrypt::hash(&data.new_password, BCRYPT_COST.to_owned()) {
-                            Ok(password_data) => password_data,
-                            Err(_err) => panic!("Error while bcrypt password")
-                        };
-                            
-                        found_user.password = Some(new_password_hashed);
-                        found_user.updated_at = Some(Utc::now());
-    
+                let key_value = format!("user:{}:uuid_user_activate", found_user.id);
+            
+                if path.into_inner() == cache_get_key::<&str, String>(&key_value).await.unwrap() {
+                    let new_password_hashed = match bcrypt::hash(
+                            &data.new_password, 
+                            BCRYPT_COST.to_owned()
+                        ) {
+                        Ok(password_data) => password_data,
+                        Err(_err) => panic!("Error while bcrypt password")
+                    };
+                    
+                    found_user.password = Some(new_password_hashed);
+                    found_user.updated_at = Some(Utc::now());
+
+                    let update_query = conn.transaction(
+                        |con| async move {
+                        
                         let update_user_password = diesel::update(users::table
                             .filter(users::id.eq(found_user.id))
                             ).set(found_user)
-                            .get_result::<User>(conn)
-                            .await
-                            .expect("Error updating user!");
-    
-                        let updated_user_response = UserUpdateResponse {
-                            message: "User updated",
-                            user: update_user_password
-                        };
-                        
-                        return HttpResponse::Ok()
-                            .content_type(ContentType::json())
-                            .json(updated_user_response);
-                    } else {
-                        let uuid_not_exists_err = UserUpdateError {
-                            message: "Bad Request while activating user!",
-                            error: "UUID do not exists."
-                        };
+                            .get_result::<User>(con)
+                            .await;
 
-                        return HttpResponse::BadRequest().content_type(ContentType::json()).json(uuid_not_exists_err);
-                    }
-        
+
+                        return update_user_password;
+                        
+                    }.scope_boxed()).await;
                     
-                },
-                Err(error) => {
-                    let internal_err = UserUpdateError {
-                        message: "Internal server error activating user!",
-                        error: &error.to_string()
+                    cache_del_key::<String, String>(key_value).await.unwrap();
+
+                    match update_query {
+                        Ok(_user) => {
+                            let user_activated_response = GenericResponse {
+                                message: "User activated successfully!"
+                            };
+
+                            return HttpResponse::Ok()
+                            .content_type(ContentType::json())
+                            .json(user_activated_response);
+                        },
+                        Err(_) => {
+                            let query_error_response = GenericError {
+                                message: "Internal server error while activating user!",
+                                error: "Error in activate user query in database."
+                            };
+
+                            return HttpResponse::InternalServerError()
+                            .content_type(ContentType::json())
+                            .json(query_error_response);
+                        }
+                    }
+                } else {
+                    let uuid_not_exists_err = UserUpdateError {
+                        message: "Bad Request while activating user!",
+                        error: "UUID do not exists."
                     };
 
-                    return HttpResponse::InternalServerError()
+                    return HttpResponse::BadRequest().content_type(ContentType::json()).json(uuid_not_exists_err);
+                }
+            }, Err(error) => {
+            return HttpResponse::BadRequest().content_type(ContentType::json()).json(error);
+        }
+    }
+}
+
+async fn resend_user_activation_hash(body: web::Json<UserResendActivationHashRequest>) -> impl Responder {
+
+    let validate = body.validate();
+    
+    match validate {
+        Ok(_) => {
+            let data = body.into_inner();
+            let conn = &mut get_connection().await.unwrap();
+            
+            let found_user = users::table
+                .filter(users::email.eq(data.email))
+                .select(User::as_select())
+                .get_result::<User>(conn)
+                .await;
+
+            match found_user {
+                Ok(user) => {
+
+                    let context = ContextV7::new();
+                    let time_unix = Timestamp::now(&context).to_unix();
+
+                    let uuid_user = Uuid::new_v7(
+                        Timestamp::from_unix(&context,time_unix.0, time_unix.1)
+                    );
+
+                    let cache_uuid = cache_set_key::<&str, String, ()>(
+                        &format!("user:{}:uuid_user_activate", &user.id),
+                        uuid_user.to_string(),
+                        86400
+                    ).await;
+
+                    match cache_uuid {
+                        Ok(_) => {
+                            let message_email = format!("This is your Token for define your password {}", uuid_user.to_string());
+
+                            let email_text_body = SinglePart::builder()
+                                .header(header::ContentType::TEXT_PLAIN)
+                                .body(message_email);
+
+                            // Ler dados do usuário da aplicação (.env) e de quem vai receber o email
+                            let google_email = dotenv!("EMAIL");
+                            let user_receiver = user.email;
+                            let google_token = dotenv!("GOOGLE_TOKEN");
+                            
+                            // Criar o Email
+                            let email_singlepart = Message::builder()
+                                .from(google_email.parse().unwrap())
+                                .to(user_receiver.parse().unwrap())
+                                .subject("Ativar conta Logistica-APP")
+                                .singlepart(email_text_body).unwrap();
+
+                            // Resgatar as credenciais para conexão segura
+                            let creds = Credentials::new(google_email.to_owned(), google_token.to_owned());
+
+                            // Construtor do algoritmo de transporte pelo serviço do Gmail
+                            let mailer = SmtpTransport::starttls_relay("smtp.gmail.com").expect("Error creating StartTLS Transport")
+                                .authentication(vec![Mechanism::Plain])
+                                .credentials(creds)
+                                .build();
+
+                            let response = GenericResponse {
+                                message: "A new hash sent to your email!"
+                            };
+
+                            match mailer.send(&email_singlepart) {
+                                Ok(_) => return HttpResponse::Ok()
+                                    .content_type(ContentType::json())
+                                    .json(response),
+                                Err(e) => return HttpResponse::BadGateway()
+                                    .content_type(ContentType::json())
+                                    .json(EmailSendError {
+                                        message: "Error sending email!",
+                                        error: &e.to_string()
+                                    }),
+                            }
+                        },
+                        Err(error) => {
+                            let error_msg = error.to_string();
+
+                            let response = GenericError {
+                                message: "Error while setting uuid key in cache!",
+                                error: &error_msg
+                            };
+                            
+                            return HttpResponse::InternalServerError()
+                                .content_type(ContentType::json())
+                                .json(response);
+                        }
+                    }
+                } Err(_error) => {
+                    let user_not_found_res = GenericError {
+                        message: "User Not Found!",
+                        error: "User with this email not exists in our App."
+                    };
+
+                    return HttpResponse::NotFound()
                         .content_type(ContentType::json())
-                        .json(internal_err);
+                        .json(user_not_found_res);
                 }
             }
-        
-        
         },
         Err(error) => {
             return HttpResponse::BadRequest().content_type(ContentType::json()).json(error);
         }
     }
-
 }
 
 /// Endpoint para solicitar ativação da Autenticação de dois fatores
@@ -867,6 +1009,8 @@ pub async fn activate_2fa(req: HttpRequest, body: web::Json<UserActivate2FAReque
 pub fn config(cfg: &mut ServiceConfig) {
     cfg.service(
 web::scope("/users")
+            .route("/resend-activation-hash", web::post().to(resend_user_activation_hash))
+            .route("/activate-user/{uuid}", web::put().to(activate_user))
             .service(web::scope("")
                 .route("/deleteMyAccount",web::delete().to(delete_my_account))
                 .route("/update/{id}", web::put().to(update))
@@ -874,7 +1018,6 @@ web::scope("/users")
                 .route("/enable-2fa", web::get().to(enable_2fa))
                 .route("/activate-2fa", web::post().to(activate_2fa))
                 .route("/store", web::post().to(store))
-                .route("/activate-user/{id}", web::put().to(activate_user))
                 .wrap(from_fn(auth_middleware))
             )
     );
