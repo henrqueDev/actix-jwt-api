@@ -6,6 +6,7 @@ use diesel_async::RunQueryDsl;
 use lazy_static::lazy_static;
 use redis::AsyncCommands;
 use dotenvy_macro::dotenv;
+use jsonwebtoken::errors::ErrorKind::ExpiredSignature;
 
 lazy_static! {
     static ref REDIS_URL: String = {
@@ -67,7 +68,20 @@ pub async fn auth_middleware(
                 }
                 
             },
-            Err(_error) => {
+            Err(error) => {
+                let the_error = error.into_kind();
+                
+                if the_error == ExpiredSignature {
+                    let error_response = GenericError {
+                        message: "Expired token!",
+                        error: "Your Token expired, please login again."
+                    };
+        
+                    let error = Err(error_response);
+                    
+                    return error.map_err(|e| actix_web::error::ErrorUnauthorized(e))?;
+                }
+
                 let ip_address = req.connection_info().peer_addr().unwrap().to_owned();
 
                 let client = &mut redis::Client::open(REDIS_URL.to_owned())
