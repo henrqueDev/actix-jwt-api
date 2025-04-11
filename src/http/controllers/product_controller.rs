@@ -7,7 +7,7 @@ use crate::{database::db::get_connection, http::{middleware::auth_middleware::au
 use crate::http::responses::product::product_index_response::ProductIndexResponse;
 
 /// Endpoint para consulta de products com filtros opcionais
-pub async fn index(query_params: web::Query<ProductFilterRequest>) -> impl Responder {
+async fn index(query_params: web::Query<ProductFilterRequest>) -> impl Responder {
 
     let conn = &mut get_connection().await.unwrap();
 
@@ -34,6 +34,30 @@ pub async fn index(query_params: web::Query<ProductFilterRequest>) -> impl Respo
         query = query.filter(products::dimension_width.ge(dimension_width_query));
     }
 
+    if let Some(product_category) = query_params.0.product_category {
+        let query_category_id: Result<i32, _> = product_categories::table
+            .filter(product_categories::name.eq(product_category))
+            .select(product_categories::id)
+            .get_result::<i32>(conn)
+            .await;
+
+        match query_category_id {
+            Ok(id) => {
+                query = query.filter(products::product_category_id.eq(id));
+            },
+            Err(_) => {
+                let bad_request_cat_res = GenericError {
+                    message: "Bad Request querying Products!",
+                    error: "Product Category do not exists."
+                };
+
+                return HttpResponse::BadRequest()
+                .content_type(ContentType::json())
+                .json(bad_request_cat_res);
+            }
+        };
+
+    }
 
     // Filtro de paginação
     if let Some(page_query) = query_params.0.page {
@@ -312,7 +336,7 @@ async fn store(body: web::Json<ProductStoreRequest>) -> impl Responder {
 }
 
 /// Endpoint para Excluir produto (Exclusão lógica)
-pub async fn delete(path: web::Path<u32>) -> impl Responder{
+async fn delete(path: web::Path<u32>) -> impl Responder{
     let id = path.into_inner();
             
     let conn = &mut get_connection().await.unwrap();
@@ -390,7 +414,7 @@ pub async fn delete(path: web::Path<u32>) -> impl Responder{
 }
 
 /// Endpoint Restaurar produto excluido (Exclusão lógica)
-pub async fn restore(path: web::Path<u32>) -> impl Responder{
+async fn restore(path: web::Path<u32>) -> impl Responder{
     let id = path.into_inner();
             
     let conn = &mut get_connection().await.unwrap();
