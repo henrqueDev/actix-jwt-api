@@ -1,6 +1,6 @@
 -- Your SQL goes here
 
-CREATE TABLE product_categories (
+CREATE TABLE models (
     id SERIAL PRIMARY KEY,
     name VARCHAR(128) UNIQUE NOT NULL,
     created_at timestamp with time zone,
@@ -8,5 +8,5 @@ CREATE TABLE product_categories (
     deleted_at timestamp with time zone
 );
 
-INSERT INTO product_categories (id, name) VALUES (1, 'Eletrônicos');
-INSERT INTO product_categories (id, name) VALUES (2, 'Roupas');
+INSERT INTO models (id, name) VALUES (1, 'Eletrônicos');
+INSERT INTO models (id, name) VALUES (2, 'Roupas');

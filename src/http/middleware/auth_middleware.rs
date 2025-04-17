@@ -34,7 +34,7 @@ lazy_static! {
     };
 }
 
-use crate::{database::db::get_connection, http::GenericError, model::user::user::User, schema::users, services::auth::decode_jwt};
+use crate::{database::db::get_connection, http::GenericError, models::user::user::User, schema::users, services::auth::decode_jwt};
 
 pub async fn auth_middleware(
     req: ServiceRequest,

@@ -12,5 +12,5 @@ pub struct ProductUpdateRequest {
     pub dimension_height: Option<f32>,
     pub dimension_width: Option<f32>,
     pub dimension_depth: Option<f32>,
-    pub product_category_id: Option<i32>
+    pub model_id: Option<i32>
 }

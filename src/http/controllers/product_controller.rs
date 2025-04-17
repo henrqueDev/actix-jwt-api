@@ -3,7 +3,7 @@ use chrono::Utc;
 use diesel::{ExpressionMethods, QueryDsl, SelectableHelper, TextExpressionMethods};
 use diesel_async::RunQueryDsl;
 use validator::Validate;
-use crate::{database::db::get_connection, http::{middleware::auth_middleware::auth_middleware, requests::product::{product_filter_request::ProductFilterRequest, product_store_request::ProductStoreRequest, product_update_request::ProductUpdateRequest}, responses::product::{product_store_response::{ProductStoreError, ProductStoreResponse}, product_update_response::ProductUpdateResponse}, GenericError}, model::product::{product::Product, product_dto::ProductDTO}, schema::{product_categories, products}};
+use crate::{database::db::get_connection, http::{middleware::auth_middleware::auth_middleware, requests::product::{product_filter_request::ProductFilterRequest, product_store_request::ProductStoreRequest, product_update_request::ProductUpdateRequest}, responses::product::{product_store_response::{ProductStoreError, ProductStoreResponse}, product_update_response::ProductUpdateResponse}, GenericError}, models::product::{product::Product, product_dto::ProductDTO}, schema::{models, products}};
 use crate::http::responses::product::product_index_response::ProductIndexResponse;
 
 /// Endpoint para consulta de products com filtros opcionais
@@ -34,16 +34,16 @@ async fn index(query_params: web::Query<ProductFilterRequest>) -> impl Responder
         query = query.filter(products::dimension_width.ge(dimension_width_query));
     }
 
-    if let Some(product_category) = query_params.0.product_category {
-        let query_category_id: Result<i32, _> = product_categories::table
-            .filter(product_categories::name.eq(product_category))
-            .select(product_categories::id)
+    if let Some(model) = query_params.0.model {
+        let query_model_id: Result<i32, _> = models::table
+            .filter(models::name.eq(model))
+            .select(models::id)
             .get_result::<i32>(conn)
             .await;
 
-        match query_category_id {
+        match query_model_id {
             Ok(id) => {
-                query = query.filter(products::product_category_id.eq(id));
+                query = query.filter(products::model_id.eq(id));
             },
             Err(_) => {
                 let bad_request_cat_res = GenericError {
@@ -140,7 +140,7 @@ async fn update(path: web::Path<u32>,body: web::Json<ProductUpdateRequest>) -> i
                         dimension_height: product.dimension_height,
                         dimension_width: product.dimension_width,
                         dimension_depth: product.dimension_depth,
-                        product_category_id: product.product_category_id,
+                        model_id: product.model_id,
                         created_at: product.created_at,
                         updated_at: product.updated_at,
                         deleted_at: product.deleted_at,
@@ -182,23 +182,23 @@ async fn update(path: web::Path<u32>,body: web::Json<ProductUpdateRequest>) -> i
                         None => {}
                     }
 
-                    match data.product_category_id {
+                    match data.model_id {
                         Some(category_id) => {
                             
-                            let category = product_categories::table
-                                .filter(product_categories::id.eq(category_id))
-                                .select(product_categories::id)
+                            let category = models::table
+                                .filter(models::id.eq(category_id))
+                                .select(models::id)
                                 .get_result::<i32>(conn)
                                 .await;
 
                             match category{
-                                Ok(category_found_id) => {
-                                    new_product_updated.product_category_id = category_found_id;                                    
+                                Ok(model_found_id) => {
+                                    new_product_updated.model_id = model_found_id;                                    
                                 },
                                 Err(_) => {
                                     let err_not_found = GenericError {
-                                        message: "Error updating Category of product!",
-                                        error: "Product category was not found."
+                                        message: "Error updating Model of product!",
+                                        error: "Model was not found."
                                     };
 
                                     return HttpResponse::NotFound().content_type(ContentType::json()).json(err_not_found);
@@ -261,9 +261,9 @@ async fn store(body: web::Json<ProductStoreRequest>) -> impl Responder {
             let data = body.into_inner();
             let conn = &mut get_connection().await.unwrap();
         
-            let product_cat_id = product_categories::table
-                .filter(product_categories::id.eq(&data.product_category_id))
-                .select(product_categories::id)
+            let product_cat_id = models::table
+                .filter(models::id.eq(&data.model_id))
+                .select(models::id)
                 .get_result::<i32>(conn)
                 .await;
         
@@ -280,7 +280,7 @@ async fn store(body: web::Json<ProductStoreRequest>) -> impl Responder {
                         dimension_height: data.dimension_height,
                         dimension_width: data.dimension_width,
                         dimension_depth: data.dimension_depth,
-                        product_category_id: category_id,
+                        model_id: category_id,
                         created_at: Some(time_now),
                         updated_at: Some(time_now),
                         deleted_at: None,
@@ -367,7 +367,7 @@ async fn delete(path: web::Path<u32>) -> impl Responder{
                         dimension_height: product.dimension_height,
                         dimension_width: product.dimension_width,
                         dimension_depth: product.dimension_depth,
-                        product_category_id: product.product_category_id,
+                        model_id: product.model_id,
                         created_at: product.created_at,
                         updated_at: product.updated_at,
                         deleted_at: product.deleted_at,
@@ -435,7 +435,7 @@ async fn restore(path: web::Path<u32>) -> impl Responder{
                 dimension_height: product.dimension_height,
                 dimension_width: product.dimension_width,
                 dimension_depth: product.dimension_depth,
-                product_category_id: product.product_category_id,
+                model_id: product.model_id,
                 created_at: product.created_at,
                 updated_at: product.updated_at,
                 deleted_at: product.deleted_at,

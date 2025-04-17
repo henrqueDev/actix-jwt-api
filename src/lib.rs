@@ -1,4 +1,4 @@
-pub mod model;
+pub mod models;
 pub mod schema;
 pub mod http;
 pub mod services;

@@ -1,12 +1,12 @@
 use chrono::{DateTime, Utc};
 use diesel::{prelude::{AsChangeset, Insertable, Queryable}, Selectable};
 use serde::Serialize;
-use crate::schema::product_categories;
+use crate::schema::models;
 
 #[derive(Queryable, Insertable, Selectable, Serialize, Debug, Clone, AsChangeset)]
-#[diesel(table_name = product_categories)]
+#[diesel(table_name = models)]
 #[diesel(treat_none_as_null = true)]
-pub struct ProductCategoryDTO {
+pub struct ModelDTO {
     pub name: String,
     pub created_at: Option<DateTime<Utc>>,
     pub updated_at: Option<DateTime<Utc>>,

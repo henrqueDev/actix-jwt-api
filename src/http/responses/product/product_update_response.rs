@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use crate::model::product::product::Product;
+use crate::models::product::product::Product;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ProductUpdateResponse<'a> {

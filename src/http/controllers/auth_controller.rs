@@ -5,7 +5,7 @@ use diesel_async::RunQueryDsl;
 use totp_rs::{Algorithm, Secret, TOTP};
 use dotenvy_macro::dotenv;
 use validator::Validate;
-use crate::{database::db::get_connection, http::{middleware::auth_middleware::auth_middleware, requests::auth::auth_login_request::AuthLoginRequest, responses::auth::auth_login_response::{AuthLoginError, AuthLoginResponse}, GenericError, GenericResponse}, model::user::user::User, schema::users, services::{auth::{decode_jwt, encode_jwt}, brute_force_protection::brute_force_protection}};
+use crate::{database::db::get_connection, http::{middleware::auth_middleware::auth_middleware, requests::auth::auth_login_request::AuthLoginRequest, responses::auth::auth_login_response::{AuthLoginError, AuthLoginResponse}, GenericError, GenericResponse}, models::user::user::User, schema::users, services::{auth::{decode_jwt, encode_jwt}, brute_force_protection::brute_force_protection}};
 
 /// Endpoint para o usuário efetuar o Login
 pub async fn login(req: HttpRequest, body: web::Json<AuthLoginRequest>) -> impl Responder {

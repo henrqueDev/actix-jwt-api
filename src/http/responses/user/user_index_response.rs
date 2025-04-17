@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::model::user::user_dto::UserDTOMin;
+use crate::models::user::user_dto::UserDTOMin;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UserIndexResponse<'a> {
     pub message: &'a str,

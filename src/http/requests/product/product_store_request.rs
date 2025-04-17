@@ -13,5 +13,5 @@ pub struct ProductStoreRequest {
     pub dimension_height: f32,
     pub dimension_width: f32,
     pub dimension_depth: f32,
-    pub product_category_id: i32
+    pub model_id: i32
 }

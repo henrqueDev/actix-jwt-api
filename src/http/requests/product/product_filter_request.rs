@@ -12,7 +12,7 @@ pub struct ProductFilterRequest {
     pub dimension_height: Option<f32>,
     pub dimension_width: Option<f32>,
     pub dimension_depth: Option<f32>,
-    pub product_category: Option<String>,
+    pub model: Option<String>,
     pub per_page: Option<u32>,
     pub page: Option<u32>
 }

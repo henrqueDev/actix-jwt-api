@@ -1,7 +1,7 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
-    product_categories (id) {
+    models (id) {
         id -> Int4,
         #[max_length = 128]
         name -> Varchar,
@@ -24,7 +24,7 @@ diesel::table! {
         dimension_height -> Float4,
         dimension_width -> Float4,
         dimension_depth -> Float4,
-        product_category_id -> Int4,
+        model_id -> Int4,
         created_at -> Nullable<Timestamptz>,
         updated_at -> Nullable<Timestamptz>,
         deleted_at -> Nullable<Timestamptz>,
@@ -46,10 +46,10 @@ diesel::table! {
     }
 }
 
-diesel::joinable!(products -> product_categories (product_category_id));
+diesel::joinable!(products -> models (model_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
-    product_categories,
+    models,
     products,
     users,
 );

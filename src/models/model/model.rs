@@ -1,11 +1,11 @@
 use chrono::{DateTime, Utc};
 use diesel::{prelude::{Identifiable, Queryable}, Selectable};
-use crate::schema::product_categories;
+use crate::schema::models;
 
 #[derive(Queryable, Debug, Clone, Selectable, Identifiable)]
-#[diesel(table_name = product_categories)]
+#[diesel(table_name = models)]
 #[diesel(treat_none_as_null = true)]
-pub struct ProductCategory {
+pub struct Model {
     pub id: i32,
     pub name: String,
     pub created_at: Option<DateTime<Utc>>,
