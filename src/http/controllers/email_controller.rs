@@ -1,7 +1,7 @@
 use actix_multipart::form::MultipartForm;
 use actix_web::{http::header::ContentType, middleware::from_fn, web::{self, ServiceConfig}, HttpResponse, Responder};
 use lettre::{message::{Attachment, MultiPart, SinglePart}, transport::smtp::authentication::{Credentials, Mechanism}, Message, SmtpTransport, Transport};
-use crate::{http::{middleware::auth_middleware::auth_middleware, requests::email::email_send_request::{EmailSendRequest, EmailSendRequestFormData}, responses::email::email_sent_response::{EmailSendError, EmailSentResponse}}, services::redis_client::cache_get_key};
+use crate::{http::{middleware::auth_middleware::auth_middleware, requests::email::email_send_request::{EmailSendRequest, EmailSendRequestFormData}, responses::email::email_sent_response::{EmailSendError, EmailSentResponse}}, services::{google_oauth2::refresh_oauth2_google, redis_client::cache_get_key}};
 use dotenvy_macro::dotenv;
 use lettre::message::header;
 use lettre::message::header::ContentType as EmailContentType;
@@ -36,7 +36,10 @@ pub async fn send(body: MultipartForm<EmailSendRequestFormData>) -> impl Respond
     let user_email = dotenv!("EMAIL");
     let user_receiver = &data.to;
 
-    let oauth_key = cache_get_key::<&str, String>("GOOGLE_OAUTH2_KEY").await.unwrap();
+    let oauth_key = match cache_get_key::<&str, String>("GOOGLE_OAUTH2_KEY").await {
+        Ok(access_token) => access_token,
+        Err(_) => refresh_oauth2_google().await
+    };
     
     // Criar o Email
     let email = Message::builder()
@@ -49,7 +52,7 @@ pub async fn send(body: MultipartForm<EmailSendRequestFormData>) -> impl Respond
     let creds = Credentials::new(user_email.to_owned(), 
     oauth_key);
     // Construtor do algoritmo de transporte pelo serviço do Gmail
-    let mailer = SmtpTransport::relay("smtp.gmail.com").expect("Error creating StartTLS Transport")
+    let mailer = SmtpTransport::starttls_relay("smtp.gmail.com").expect("Error creating StartTLS Transport")
         .authentication(vec![Mechanism::Xoauth2])
         .credentials(creds)
         .build();

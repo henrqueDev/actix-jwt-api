@@ -29,7 +29,7 @@ pub struct RefreshTokenResponse {
     refresh_token_expires_in: u64
 }
 
-pub async fn refresh_oauth2_google() -> RefreshTokenResponse {
+pub async fn refresh_oauth2_google() -> String {
     let client = reqwest::Client::builder()
         .build().unwrap();
 
@@ -54,8 +54,8 @@ pub async fn refresh_oauth2_google() -> RefreshTokenResponse {
     let response = request.send().await.unwrap();
     let body = serde_json::from_str::<RefreshTokenResponse>(&response.text().await.unwrap()).unwrap();
     
-    let _ = cache_set_key::<&str, &String, String>("GOOGLE_OAUTH2_KEY", &body.access_token, 3600).await;
+    let _ = cache_set_key::<&str, &String, String>("GOOGLE_OAUTH2_KEY", &body.access_token, 3598).await;
 
-    return body;
+    return body.access_token;
 }
 
