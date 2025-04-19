@@ -198,7 +198,7 @@ pub async fn store(body: web::Json<UserStoreRequest>) -> impl Responder {
                 
                                     // Construtor do algoritmo de transporte pelo serviço do Gmail
                                     let mailer = SmtpTransport::starttls_relay("smtp.gmail.com").expect("Error creating StartTLS Transport")
-                                        .authentication(vec![Mechanism::Plain])
+                                        .authentication(vec![Mechanism::Xoauth2])
                                         .credentials(creds)
                                         .build();
                 
