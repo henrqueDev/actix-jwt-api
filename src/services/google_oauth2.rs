@@ -7,7 +7,7 @@ use crate::services::redis_client::cache_set_key;
 
 lazy_static! {
     static ref GOOGLE_CLIENT_ID: &'static str = dotenv!("ID_CLIENT_GOOGLE");
-    static ref GOOGLE_TOKEN_ID: &'static str = dotenv!("KEY_CLIENT_GOOGLE");
+    static ref GOOGLE_TOKEN_ID: &'static str = dotenv!("SECRET_CLIENT_GOOGLE");
     static ref REFRESH_TOKEN_GOOGLE: &'static str = dotenv!("REFRESH_TOKEN_GOOGLE");
     static ref REDIRECT_URI_GOOGLE: &'static str = dotenv!("REDIRECT_URI_GOOGLE");
 }
