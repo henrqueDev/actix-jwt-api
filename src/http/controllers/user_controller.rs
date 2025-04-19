@@ -635,7 +635,10 @@ async fn resend_user_activation_hash(body: web::Json<UserResendActivationHashReq
                             // Ler dados do usuário da aplicação (.env) e de quem vai receber o email
                             let google_email = dotenv!("EMAIL");
                             let user_receiver = user.email;
-                            let google_token = dotenv!("GOOGLE_TOKEN");
+                            let google_token = match cache_get_key::<&str, String>("GOOGLE_OAUTH2_KEY").await {
+                                Ok(access_token) => access_token,
+                                Err(_) => refresh_oauth2_google().await
+                            };
                             
                             // Criar o Email
                             let email_singlepart = Message::builder()
@@ -645,7 +648,7 @@ async fn resend_user_activation_hash(body: web::Json<UserResendActivationHashReq
                                 .singlepart(email_text_body).unwrap();
 
                             // Resgatar as credenciais para conexão segura
-                            let creds = Credentials::new(google_email.to_owned(), google_token.to_owned());
+                            let creds = Credentials::new(google_email.to_owned(), google_token);
 
                             // Construtor do algoritmo de transporte pelo serviço do Gmail
                             let mailer = SmtpTransport::starttls_relay("smtp.gmail.com").expect("Error creating StartTLS Transport")
