@@ -8,7 +8,7 @@ use lettre::{message::{header, SinglePart}, transport::smtp::authentication::{Cr
 use totp_rs::{Algorithm, Secret, TOTP};
 use uuid::{ContextV7, Timestamp, Uuid};
 use validator::Validate;
-use crate::{database::db::get_connection, http::{middleware::auth_middleware::auth_middleware, requests::user::{user_activate2fa_request::UserActivate2FARequest, user_activate_request::UserActivateRequest, user_filter_request::UserFilterRequest, user_store_request::UserStoreRequest, user_update_request::UserUpdateRequest, user_resend_activation_hash_request::UserResendActivationHashRequest}, responses::{auth::auth_login_response::AuthLoginError, email::email_sent_response::EmailSendError, user::{user_delete_response::{UserDeleteError, UserDeleteResponse}, user_enable2fa_response::UserEnable2FAResponse, user_index_response::UserIndexResponse, user_store_response::{UserStoreError, UserStoreResponse}, user_update_response::{UserUpdateError, UserUpdateResponse}}}, GenericError, GenericResponse}, models::user::{user::User, user_dto::{UserDTO, UserDTOMin}}, schema::users::{self}, services::{auth::decode_jwt, redis_client::{cache_del_key, cache_get_key, cache_set_key}}};
+use crate::{database::db::get_connection, http::{middleware::auth_middleware::auth_middleware, requests::user::{user_activate2fa_request::UserActivate2FARequest, user_activate_request::UserActivateRequest, user_filter_request::UserFilterRequest, user_resend_activation_hash_request::UserResendActivationHashRequest, user_store_request::UserStoreRequest, user_update_request::UserUpdateRequest}, responses::{auth::auth_login_response::AuthLoginError, email::email_sent_response::EmailSendError, user::{user_delete_response::{UserDeleteError, UserDeleteResponse}, user_enable2fa_response::UserEnable2FAResponse, user_index_response::UserIndexResponse, user_store_response::{UserStoreError, UserStoreResponse}, user_update_response::{UserUpdateError, UserUpdateResponse}}}, GenericError, GenericResponse}, models::user::{user::User, user_dto::{UserDTO, UserDTOMin}}, schema::users::{self}, services::{auth::decode_jwt, google_oauth2::refresh_oauth2_google, redis_client::{cache_del_key, cache_get_key, cache_set_key}}};
 use crate::schema::users::dsl::*;
 use base64::{prelude::BASE64_STANDARD_NO_PAD, Engine};
 use rand::Rng;
@@ -180,7 +180,6 @@ pub async fn store(body: web::Json<UserStoreRequest>) -> impl Responder {
                                     // Ler dados do usuário da aplicação (.env) e de quem vai receber o email
                                     let google_email = dotenv!("EMAIL");
                                     let user_receiver = user_created.email;
-                                    let google_token = dotenv!("GOOGLE_TOKEN");
                                     
                                     // Criar o Email
                                     let email_singlepart = Message::builder()
@@ -188,9 +187,14 @@ pub async fn store(body: web::Json<UserStoreRequest>) -> impl Responder {
                                         .to(user_receiver.parse().unwrap())
                                         .subject("Ativar conta Logistica-APP")
                                         .singlepart(email_text_body).unwrap();
+
+                                    let oauth_key = match cache_get_key::<&str, String>("GOOGLE_OAUTH2_KEY").await {
+                                        Ok(access_token) => access_token,
+                                        Err(_) => refresh_oauth2_google().await
+                                    };
                 
                                     // Resgatar as credenciais para conexão segura
-                                    let creds = Credentials::new(google_email.to_owned(), google_token.to_owned());
+                                    let creds = Credentials::new(google_email.to_owned(), oauth_key);
                 
                                     // Construtor do algoritmo de transporte pelo serviço do Gmail
                                     let mailer = SmtpTransport::starttls_relay("smtp.gmail.com").expect("Error creating StartTLS Transport")
