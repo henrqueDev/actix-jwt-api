@@ -8,7 +8,7 @@ use lettre::{message::{header, SinglePart}, transport::smtp::authentication::{Cr
 use totp_rs::{Algorithm, Secret, TOTP};
 use uuid::{ContextV7, Timestamp, Uuid};
 use validator::Validate;
-use crate::{database::db::get_connection, http::{middleware::auth_middleware::auth_middleware, requests::user::{user_activate2fa_request::UserActivate2FARequest, user_activate_request::UserActivateRequest, user_filter_request::UserFilterRequest, user_resend_activation_hash_request::UserResendActivationHashRequest, user_store_request::UserStoreRequest, user_update_request::UserUpdateRequest}, responses::{auth::auth_login_response::AuthLoginError, email::email_sent_response::EmailSendError, user::{user_delete_response::{UserDeleteError, UserDeleteResponse}, user_enable2fa_response::UserEnable2FAResponse, user_index_response::UserIndexResponse, user_store_response::{UserStoreError, UserStoreResponse}, user_update_response::{UserUpdateError, UserUpdateResponse}}}, GenericError, GenericResponse}, models::user::{user::User, user_dto::{UserDTO, UserDTOMin}}, schema::users::{self}, services::{auth::decode_jwt, google_oauth2::refresh_oauth2_google, redis_client::{cache_del_key, cache_get_key, cache_set_key}}};
+use crate::{database::db::get_connection, http::{middleware::{auth_middleware::auth_middleware, permissions_middleware::permissions_middleware}, requests::user::{user_activate2fa_request::UserActivate2FARequest, user_activate_request::UserActivateRequest, user_filter_request::UserFilterRequest, user_resend_activation_hash_request::UserResendActivationHashRequest, user_store_request::UserStoreRequest, user_update_request::UserUpdateRequest}, responses::{auth::auth_login_response::AuthLoginError, email::email_sent_response::EmailSendError, user::{user_delete_response::{UserDeleteError, UserDeleteResponse}, user_enable2fa_response::UserEnable2FAResponse, user_index_response::UserIndexResponse, user_store_response::{UserStoreError, UserStoreResponse}, user_update_response::{UserUpdateError, UserUpdateResponse}}}, GenericError, GenericResponse}, models::user::{user::User, user_dto::{UserDTO, UserDTOMin}}, schema::users::{self}, services::{auth::decode_jwt, google_oauth2::refresh_oauth2_google, redis_client::{cache_del_key, cache_get_key, cache_set_key}}};
 use crate::schema::users::dsl::*;
 use base64::{prelude::BASE64_STANDARD_NO_PAD, Engine};
 use rand::Rng;
@@ -1024,11 +1024,14 @@ web::scope("/users")
             .route("/activate-user/{uuid}", web::put().to(activate_user))
             .service(web::scope("")
                 .route("/deleteMyAccount",web::delete().to(delete_my_account))
-                .route("/update/{id}", web::put().to(update))
-                .route("/index", web::get().to(index))
                 .route("/enable-2fa", web::get().to(enable_2fa))
                 .route("/activate-2fa", web::post().to(activate_2fa))
-                .route("/store", web::post().to(store))
+                .service(web::scope("")
+                    .route("/update/{id}", web::put().to(update))
+                    .route("/index", web::get().to(index))
+                    .route("/store", web::post().to(store))
+                    .wrap(from_fn(permissions_middleware))
+                )
                 .wrap(from_fn(auth_middleware))
             )
     );
