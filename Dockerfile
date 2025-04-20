@@ -10,35 +10,12 @@ WORKDIR /app
 # Copy the Cargo.toml and Cargo.lock files
 COPY Cargo.toml Cargo.lock ./
 
+RUN cargo install diesel_cli --no-default-features --features postgres
 
 COPY . ./
-# # Create an empty src directory to trick Cargo into thinking it's a valid Rust project
-# RUN mkdir src && echo "fn main() {}" > src/main.rs
 
 # Build the dependencies without the actual source code to cache dependencies separately
 RUN cargo build --release
-
-
-# Now copy the source code
-
-# Build your application
-
-# Start a new stage to create a smaller image without unnecessary build dependencies
-# FROM debian:bookworm-slim
-
-# # Install libpq for PostgreSQL connectivity
-# RUN apt-get update && \
-#     apt-get install -y libpq5 && \
-#     apt-get install -y libssl3 && \
-#     apt-get install -y ca-certificates && \
-#     rm -rf /var/lib/apt/lists/*
-
-# Set the working directory
-#WORKDIR /app
-
-# Copy the built binary from the previous stage
-
-#COPY --from=builder . ./
 
 EXPOSE 8080
 EXPOSE 587
