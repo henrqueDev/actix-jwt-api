@@ -152,7 +152,7 @@ pub async fn login(req: HttpRequest, body: web::Json<AuthLoginRequest>) -> impl 
                                 None => {
                                     let res_err = AuthLoginError {
                                         message: "You have not set your user password yet!",
-                                        error: "Error trying update user!"
+                                        error: "Error trying to login"
                                     };
         
                                     return HttpResponse::Conflict()

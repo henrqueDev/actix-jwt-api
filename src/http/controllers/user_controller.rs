@@ -191,7 +191,24 @@ pub async fn store(body: web::Json<UserStoreRequest>) -> impl Responder {
 
                                     let oauth_key = match cache_get_key::<&str, String>("GOOGLE_OAUTH2_KEY").await {
                                         Ok(access_token) => access_token,
-                                        Err(_) => refresh_oauth2_google().await
+                                        Err(_) => {
+                                            let refresh_oauth2_token = refresh_oauth2_google().await;
+                                            match refresh_oauth2_token {
+                                                Ok(token) => token,
+                                                Err(_) => {
+                                                    // Preparar dados do erro interno para a resposta
+                                                    let response = GenericError{
+                                                        message: "Error refreshing OAuth2 token!",
+                                                        error: "You have to regenerate OAuth2 code!"
+                                                    };
+                                                    
+                                                    // Retornar dados com status 500
+                                                    return HttpResponse::InternalServerError()
+                                                        .content_type(ContentType::json())
+                                                        .json(response);
+                                                }
+                                            }
+                                        }
                                     };
                 
                                     // Resgatar as credenciais para conexão segura
@@ -639,7 +656,25 @@ async fn resend_user_activation_hash(body: web::Json<UserResendActivationHashReq
                             let user_receiver = user.email;
                             let google_token = match cache_get_key::<&str, String>("GOOGLE_OAUTH2_KEY").await {
                                 Ok(access_token) => access_token,
-                                Err(_) => refresh_oauth2_google().await
+                                Err(_) => {
+                                    let refresh_oauth2_token = refresh_oauth2_google().await;
+                                    
+                                    match refresh_oauth2_token {
+                                        Ok(token) => token,
+                                        Err(_) => {
+                                            // Preparar dados do erro interno para a resposta
+                                            let response = GenericError{
+                                                message: "Error refreshing OAuth2 token!",
+                                                error: "You have to regenerate OAuth2 code!"
+                                            };
+                                            
+                                            // Retornar dados com status 500
+                                            return HttpResponse::InternalServerError()
+                                                .content_type(ContentType::json())
+                                                .json(response);
+                                        }
+                                    }
+                                }
                             };
                             
                             // Criar o Email

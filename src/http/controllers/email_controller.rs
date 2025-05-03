@@ -1,7 +1,7 @@
 use actix_multipart::form::MultipartForm;
 use actix_web::{http::header::ContentType, middleware::from_fn, web::{self, ServiceConfig}, HttpResponse, Responder};
 use lettre::{message::{Attachment, MultiPart, SinglePart}, transport::smtp::authentication::{Credentials, Mechanism}, Message, SmtpTransport, Transport};
-use crate::{http::{middleware::auth_middleware::auth_middleware, requests::email::email_send_request::{EmailSendRequest, EmailSendRequestFormData}, responses::email::email_sent_response::{EmailSendError, EmailSentResponse}}, services::{google_oauth2::refresh_oauth2_google, redis_client::cache_get_key}};
+use crate::{http::{middleware::auth_middleware::auth_middleware, requests::email::email_send_request::{EmailSendRequest, EmailSendRequestFormData}, responses::email::email_sent_response::{EmailSendError, EmailSentResponse}, GenericError}, services::{google_oauth2::refresh_oauth2_google, redis_client::cache_get_key}};
 use dotenvy_macro::dotenv;
 use lettre::message::header;
 use lettre::message::header::ContentType as EmailContentType;
@@ -38,7 +38,25 @@ pub async fn send(body: MultipartForm<EmailSendRequestFormData>) -> impl Respond
 
     let oauth_key = match cache_get_key::<&str, String>("GOOGLE_OAUTH2_KEY").await {
         Ok(access_token) => access_token,
-        Err(_) => refresh_oauth2_google().await
+        Err(_) => {
+            let refresh_oauth2_token = refresh_oauth2_google().await;
+            
+            match refresh_oauth2_token {
+                Ok(token) => token,
+                Err(_) => {
+                    // Preparar dados do erro interno para a resposta
+                    let response = GenericError{
+                        message: "Error refreshing OAuth2 token!",
+                        error: "You have to regenerate OAuth2 code!"
+                    };
+                    
+                    // Retornar dados com status 500
+                    return HttpResponse::InternalServerError()
+                        .content_type(ContentType::json())
+                        .json(response);
+                }
+            }
+        }
     };
     
     // Criar o Email
