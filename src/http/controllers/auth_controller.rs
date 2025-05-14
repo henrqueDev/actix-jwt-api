@@ -17,7 +17,7 @@ pub async fn login(req: HttpRequest, body: web::Json<AuthLoginRequest>) -> impl 
 
             // Consulta o usuario a partir do email fornecido no body da requisição
             let get_user = users::table
-                .filter(users::email.eq(&body.email))
+                .filter(users::email.eq(&body.email.clone().unwrap()))
                 .select(User::as_select())
                 .get_result::<User>(conn)
                 .await;
@@ -32,7 +32,7 @@ pub async fn login(req: HttpRequest, body: web::Json<AuthLoginRequest>) -> impl 
                             // Verificar se a senha está correta
                             match &user.password {
                                 Some(user_password) => {
-                                    let result = bcrypt::verify(body.password.as_bytes(),user_password).unwrap();
+                                    let result = bcrypt::verify(body.password.clone().unwrap().as_bytes(),user_password).unwrap();
 
                                     if result == true {
                                         let app_name = dotenv!("APP_NAME");
@@ -120,7 +120,7 @@ pub async fn login(req: HttpRequest, body: web::Json<AuthLoginRequest>) -> impl 
                             // Sem 2FA, apenas verificar se a senha está correta
                             match &user.password {
                                 Some(user_password) => {
-                                    let result = bcrypt::verify(body.password.as_bytes(),user_password).unwrap();
+                                    let result = bcrypt::verify(body.password.clone().unwrap().as_bytes(),user_password).unwrap();
                                     
                                     if result == true {
                                         
