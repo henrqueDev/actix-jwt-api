@@ -3,6 +3,8 @@ use lazy_static::lazy_static;
 use redis::AsyncCommands;
 use dotenvy_macro::dotenv;
 
+use super::redis_client::cache_del_key;
+
 lazy_static! {
     static ref REDIS_URL: String = {
         format!("redis://:{}@{}", dotenv!("REDIS_PASSWORD"), dotenv!("REDIS_ADDRESS"))
@@ -31,7 +33,8 @@ lazy_static! {
 
 
 pub async fn brute_force_protection(
-    req: HttpRequest
+    req: HttpRequest,
+    flag_points: Option<i16>
 ) -> () {
     let client = &mut redis::Client::open(REDIS_URL.to_owned())
         .unwrap()
@@ -44,10 +47,18 @@ pub async fn brute_force_protection(
 
     if let Ok(times) =  &ip_key_val {
         if *times < MAX_REQUESTS_TRIES_ALLOWED.to_owned() {
-            let _ = client.set_ex::<&str, u32, String>(&ip_address, times + 1, TIME_BLOCK_IP.to_owned()).await;
+            let _ = client.set_ex::<&str, u32, String>(&ip_address, times + flag_points.unwrap_or_else(|| 1) as u32, TIME_BLOCK_IP.to_owned()).await;
         }
     } else {
-        let _ = client.set_ex::<&str, u32, String>(&ip_address, 1, TIME_BLOCK_IP.to_owned()).await;    
+        let _ = client.set_ex::<&str, u32, String>(&ip_address, flag_points.unwrap_or_else(|| 1) as u32, TIME_BLOCK_IP.to_owned()).await;    
     }
         
+}
+
+
+pub async fn remove_brute_force_protection(
+    req: HttpRequest
+) -> () {
+    let ip_address = req.connection_info().peer_addr().unwrap().to_owned();
+    cache_del_key::<String, String>(ip_address).await.unwrap();
 }

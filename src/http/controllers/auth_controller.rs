@@ -5,7 +5,7 @@ use diesel_async::RunQueryDsl;
 use totp_rs::{Algorithm, Secret, TOTP};
 use dotenvy_macro::dotenv;
 use validator::Validate;
-use crate::{database::db::get_connection, http::{middleware::auth_middleware::auth_middleware, requests::auth::auth_login_request::AuthLoginRequest, responses::auth::auth_login_response::{AuthLoginError, AuthLoginResponse}, GenericError, GenericResponse}, models::user::user::User, schema::users, services::{auth::{decode_jwt, encode_jwt}, brute_force_protection::brute_force_protection}};
+use crate::{database::db::get_connection, http::{middleware::auth_middleware::auth_middleware, requests::auth::auth_login_request::AuthLoginRequest, responses::auth::auth_login_response::{AuthLoginError, AuthLoginResponse}, GenericError, GenericResponse}, models::user::user::User, schema::users, services::{auth::{decode_jwt, encode_jwt}, brute_force_protection::{brute_force_protection, remove_brute_force_protection}}};
 
 /// Endpoint para o usuário efetuar o Login
 pub async fn login(req: HttpRequest, body: web::Json<AuthLoginRequest>) -> impl Responder {
@@ -66,6 +66,8 @@ pub async fn login(req: HttpRequest, body: web::Json<AuthLoginRequest>) -> impl 
                                                 message: "Login successful",
                                                 token: Some(&token)
                                             }; 
+
+                                            remove_brute_force_protection(req).await;
                             
                                             return HttpResponse::Ok()
                                                 .content_type(ContentType::json())
@@ -80,7 +82,7 @@ pub async fn login(req: HttpRequest, body: web::Json<AuthLoginRequest>) -> impl 
                                                 message: "2FA challenge failed! Try again."
                                             };
     
-                                            brute_force_protection(req).await;
+                                            brute_force_protection(req, Some(2)).await;
             
                                             return HttpResponse::Unauthorized()
                                                 .content_type(ContentType::json())
@@ -95,7 +97,7 @@ pub async fn login(req: HttpRequest, body: web::Json<AuthLoginRequest>) -> impl 
                                             error: "Invalid email or password."
                                         };
     
-                                        brute_force_protection(req).await;
+                                        brute_force_protection(req, None).await;
                         
                                         return HttpResponse::NotFound()
                                             .content_type(ContentType::json())
@@ -142,7 +144,7 @@ pub async fn login(req: HttpRequest, body: web::Json<AuthLoginRequest>) -> impl 
                                             error: "Invalid email or password."
                                         };
 
-                                        brute_force_protection(req).await;
+                                        brute_force_protection(req, None).await;
                         
                                         return HttpResponse::NotFound()
                                             .content_type(ContentType::json())

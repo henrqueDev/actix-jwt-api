@@ -34,7 +34,9 @@ lazy_static! {
     };
 }
 
-use crate::{database::db::get_connection, http::GenericError, models::user::user::User, schema::users, services::auth::decode_jwt};
+use crate::{database::db::get_connection, models::user::user::User, schema::users, services::auth::decode_jwt};
+
+use super::{bad_request_response, internal_server_error_response, unauthorized_response};
 
 pub async fn auth_middleware(
     req: ServiceRequest,
@@ -57,13 +59,12 @@ pub async fn auth_middleware(
                 match find_user {
                     Ok(_user) => next.call(req).await,
                     Err(_error) => {
-                        let error_response = GenericError {
-                            message: "No user Logged!",
-                            error: "Some error raised on server side!"
-                        };
-        
-                        let error = Err(error_response);
-                        return error.map_err(|e| actix_web::error::ErrorBadRequest(e))?;
+                        return Err(bad_request_response(
+                            req,
+                            "Some error raised on server side!",
+                            "No user Logged!",
+                            None
+                        ).await.unwrap());
                     }
                 }
                 
@@ -72,14 +73,12 @@ pub async fn auth_middleware(
                 let the_error = error.into_kind();
                 
                 if the_error == ExpiredSignature {
-                    let error_response = GenericError {
-                        message: "Expired token!",
-                        error: "Your Token expired, please login again."
-                    };
-        
-                    let error = Err(error_response);
-                    
-                    return error.map_err(|e| actix_web::error::ErrorUnauthorized(e))?;
+                    return Err(unauthorized_response(
+                        req,
+                        "Your Token expired, please login again.", 
+                        "Expired token!", 
+                        None
+                    ).await.unwrap());
                 }
 
                 let ip_address = req.connection_info().peer_addr().unwrap().to_owned();
@@ -95,19 +94,12 @@ pub async fn auth_middleware(
                 match has_ip {
                     Ok(times) => {
                         if times <= MAX_REQUESTS_TRIES_ALLOWED.to_owned() {
-                            let _ = client.set_ex::<&str, u32, String>(
-                                &ip_address, 
-                                times + 1, 
-                                TIME_BLOCK_IP.to_owned())
-                                .await
-                                .unwrap();
-                            let error_response = GenericError {
-                                message: "Unathorized user!",
-                                error: "Your Token do not match with our API!"
-                            };
-                
-                            let error = Err(error_response);
-                            return error.map_err(|e| actix_web::error::ErrorUnauthorized(e))?;
+                            return Err(unauthorized_response(
+                                req,
+                                "Your Token do not match with our API!",
+                                "Unathorized user!", 
+                                Some(10)
+                            ).await.unwrap());
                         } else {
                             return next.call(req).await;
                         }
@@ -116,24 +108,18 @@ pub async fn auth_middleware(
                         let causer = redis_error.code();
                         match causer {
                             Some(_error) => {
-                                let error_response = GenericError {
-                                    message: "Server side error!",
-                                    error: "Some error raised on server side!"
-                                };
-                    
-                                let error = Err(error_response);
-                                return error.map_err(|e| actix_web::error::ErrorInternalServerError(e))?;
+                                return Err(internal_server_error_response(
+                                    "Some error raised on server side!", 
+                                    "Server side error!"
+                                ).await.unwrap());
                             }
                             None => {
-                                let error_response = GenericError {
-                                    message: "Unathorized user!",
-                                    error: "Your Token do not match with our API!"
-                                };
-                    
-                                let error = Err(error_response);
-                                
-                                client.set_ex::<&str, u32, String>(&ip_address, 1, TIME_BLOCK_IP.to_owned()).await.unwrap();
-                                return error.map_err(|e| actix_web::error::ErrorUnauthorized(e))?;
+                                return Err(unauthorized_response(
+                                    req, 
+                                    "Your Token do not match with our API!", 
+                                    "Unathorized user!", 
+                                    Some(10)
+                                ).await.unwrap());
                             }
                         }
                     }
@@ -141,12 +127,11 @@ pub async fn auth_middleware(
             }
         }
     } else {
-        let user_not_found_response = GenericError {
-            message: "No user Logged!",
-            error: "authorization Header not found."
-        };
-        let error = Err(user_not_found_response);
-        return error.map_err(|e| actix_web::error::ErrorBadRequest(e))?;
-
+        return Err(bad_request_response(
+            req,
+            "Authorization Header not found.",
+            "No user Logged!",
+            None
+        ).await.unwrap());
     }
 }

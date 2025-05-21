@@ -142,7 +142,7 @@ async fn set_refresh_token_config(req: HttpRequest, query: web::Query<SetRefresh
             error: "Internal server error raised"
         };
 
-        brute_force_protection(req).await;
+        brute_force_protection(req, Some(4)).await;
 
         return HttpResponse::InternalServerError()
             .content_type(ContentType::json())

@@ -21,7 +21,7 @@ lazy_static! {
     };
 }
 
-use crate::http::GenericError;
+use super::too_many_requests_error_response;
 
 pub async fn brute_force_wall_middleware(
     req: ServiceRequest,
@@ -37,14 +37,11 @@ pub async fn brute_force_wall_middleware(
 
     if let Ok(times) = client.get::<&str, u32>(&ip_address).await {
         if times >= MAX_REQUESTS_TRIES_ALLOWED.to_owned() {
-            let error_response = GenericError {
-                message: "Too many requests! Your IP its blocked for 5 hours!",
-                error: "Too many requests."
-            };
-
-            let error = Err(error_response);
-
-            return error.map_err(|e| actix_web::error::ErrorTooManyRequests(e))?;
+            return Err(too_many_requests_error_response(
+                "Too many requests.",
+                "Too many requests! Your IP its blocked!"
+                ).await.unwrap()
+            )
         } else {
             return next.call(req).await;
         }

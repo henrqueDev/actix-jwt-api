@@ -12,7 +12,9 @@ lazy_static! {
     };
 }
 
-use crate::{database::db::get_connection, http::GenericError, models::user::user::User, schema::users, services::{auth::decode_jwt, brute_force_protection::brute_force_protection}};
+use crate::{database::db::get_connection, models::user::user::User, schema::users, services::auth::decode_jwt};
+
+use super::{bad_request_response, unauthorized_response};
 
 pub async fn permissions_middleware(
     req: ServiceRequest,
@@ -20,7 +22,6 @@ pub async fn permissions_middleware(
 ) -> Result<ServiceResponse<impl MessageBody>, Error> {
 
     if let Some(token) = req.headers().get("authorization") {
-
 
         match decode_jwt(token.to_str().expect("Error casting headervalue to &str")) {
             Ok(claim) => {
@@ -37,50 +38,40 @@ pub async fn permissions_middleware(
                         if user.user_type_id == 1 {
                             return next.call(req).await;
                         } else {
-                            let error_response = GenericError {
-                                message: "User has no permission to use this feature!",
-                                error: "User has no permission to access this route (its admin only)."
-                            };
-            
-                            let error = Err(error_response);
-                            return error.map_err(|e| actix_web::error::ErrorUnauthorized(e))?;
+                            return Err(unauthorized_response(
+                                req, 
+                                "User has no permission to access this route (its admin only).",
+                                "User has no permission to use this feature!",
+                                None
+                            ).await.unwrap());
                         }
                     },
                     Err(_error) => {
-                        let error_response = GenericError {
-                            message: "No user Logged!",
-                            error: "Some error raised on server side!"
-                        };
-        
-                        let error = Err(error_response);
-                        return error.map_err(|e| actix_web::error::ErrorBadRequest(e))?;
+                        return Err(bad_request_response(
+                            req,
+                            "Some Error raised at server side.", 
+                            "No user Logged!",
+                            None
+                        ).await.unwrap());
                     }
                 }
                 
             },
             Err(_error) => {
-                
-                let error_response = GenericError {
-                    message: "Error decoding JWT Token!",
-                    error: "Your JWT Token does not match to this API."
-                };
-                
-                let error = Err(error_response);
-
-                let request = req.request().clone();
-                
-                brute_force_protection(request).await;
-                
-                return error.map_err(|e| actix_web::error::ErrorBadRequest(e))?;
+                return Err(bad_request_response(
+                    req,
+                    "Error decoding JWT Token!",
+                    "Your JWT Token does not match to this API.",
+                    Some(10)
+                ).await.unwrap());
             }
         }
     } else {
-        let user_not_found_response = GenericError {
-            message: "No user Logged!",
-            error: "authorization Header not found."
-        };
-        let error = Err(user_not_found_response);
-        return error.map_err(|e| actix_web::error::ErrorBadRequest(e))?;
-
+        return Err(bad_request_response(
+            req,
+            "Authorization Header not found.", 
+            "No user Logged!",
+            None
+        ).await.unwrap());
     }
 }
