@@ -13,8 +13,8 @@ mod product_controller_test {
         ).await;
 
         let user_login = AuthLoginRequest {
-            email: "cleverton@example.com".to_owned(),
-            password: "cleverton123".to_owned(),
+            email: Some("cleverton@example.com".to_owned()),
+            password: Some("cleverton123".to_owned()),
             code: None
         };
 
