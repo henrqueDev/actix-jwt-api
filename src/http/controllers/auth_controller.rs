@@ -169,7 +169,7 @@ pub async fn login(req: HttpRequest, body: web::Json<AuthLoginRequest>) -> impl 
                 Err(_error) => {
                     let response = AuthLoginError{
                         message: "Error trying to login!",
-                        error: "Internal Server error looking for user in DB"
+                        error: "Invalid email or password."
                     };
 
                     return HttpResponse::NotFound()
